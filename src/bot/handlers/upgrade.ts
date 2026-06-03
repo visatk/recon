@@ -1,24 +1,30 @@
-import { CommandContext, Context } from 'grammy';
+import { CommandContext, Context, InlineKeyboard } from 'grammy';
 import { Env } from '../../types';
 import { escapeHtml } from '../../utils/ui';
 
 export async function handleUpgrade(ctx: CommandContext<Context>, env: Env) {
-	const msg = `💎 <b>Upgrade to PRO Access</b>\n\n` +
-		`Unlock the full power of ReconBox for professional bug bounty and pentesting.\n` +
-		`✅ <b>Unlimited Daily Scans</b>\n` +
-		`✅ <b>Deep Version Scanning (-sV)</b>\n` +
-		`✅ <b>Max Execution Time (5 mins)</b>\n\n` +
-		`💸 <b>Price:</b> 10 USDT / Month\n` +
-		`💳 <b>Network:</b> Tron (TRC20)\n\n` +
-		`🏦 <b>Send USDT to this address:</b>\n<code>${env.TRC20_WALLET || 'WALLET_NOT_SET'}</code>\n\n` +
-		`<b>How to activate?</b>\n` +
-		`1. Send exactly 10 USDT to the TRC20 address above.\n` +
-		`2. Copy your Transaction ID (TxID / Hash).\n` +
-		`3. Run this command to submit your payment:\n` +
+	const msg = `🚀 <b>RECONBOX PRO: ELITE ACCESS</b>\n` +
+		`━━━━━━━━━━━━━━━━━━━━━━\n` +
+		`<i>Level up your bug bounty game with unlimited power.</i>\n\n` +
+		`🔥 <b>PRO Features:</b>\n` +
+		`• <b>Unlimited Scans:</b> Zero daily limits.\n` +
+		`• <b>Deep Execution:</b> Access to intensive OSINT tools.\n` +
+		`• <b>Extended Timeout:</b> 5-minute container lifespan.\n` +
+		`• <b>Priority Node:</b> Instant sandbox provisioning.\n\n` +
+		`💳 <b>Subscription:</b> <b>10 USDT / Month</b>\n` +
+		`🔗 <b>Network:</b> Tron (TRC20)\n\n` +
+		`🏦 <b>Payment Address:</b>\n<code>${env.TRC20_WALLET || 'WALLET_NOT_SET'}</code>\n\n` +
+		`⚡ <b>Activation Steps:</b>\n` +
+		`1️⃣ Send exactly <b>10 USDT</b> to the TRC20 address above.\n` +
+		`2️⃣ Copy your TxID (Transaction Hash) from your wallet.\n` +
+		`3️⃣ Submit your payment by replying with:\n` +
 		`👉 <code>/txid YOUR_TRANSACTION_HASH</code>\n\n` +
-		`<i>⏳ An admin will verify your transaction on the blockchain and upgrade your account manually.</i>`;
+		`<i>⏳ Accounts are activated manually after blockchain confirmation.</i>`;
 
-	await ctx.reply(msg, { parse_mode: 'HTML' });
+	const keyboard = new InlineKeyboard()
+		.url('💬 Contact Billing Support', 'https://t.me/drkingbd');
+
+	await ctx.reply(msg, { parse_mode: 'HTML', reply_markup: keyboard });
 }
 
 export async function handleTxid(ctx: CommandContext<Context>, env: Env) {
@@ -29,30 +35,32 @@ export async function handleTxid(ctx: CommandContext<Context>, env: Env) {
 	if (!tgId) return;
 
 	if (!txid) {
-		return ctx.reply('⚠️ <b>Usage:</b> <code>/txid &lt;your_transaction_hash&gt;</code>\nExample: <code>/txid 8a3f...d9e1</code>', { parse_mode: 'HTML' });
+		return ctx.reply('⚠️ <b>Usage Error:</b>\nPlease format your command like this:\n<code>/txid 8a3fac49...</code>', { parse_mode: 'HTML' });
 	}
 
 	if (txid.length < 30) {
-		return ctx.reply('❌ <b>Invalid TxID.</b> Please provide a valid TRC20 transaction hash.', { parse_mode: 'HTML' });
+		return ctx.reply('❌ <b>Invalid Transaction Hash:</b>\nPlease provide a valid TRC20 TxID.', { parse_mode: 'HTML' });
 	}
 
-	// Message to send to the Admin
-	const adminMsg = `💰 <b>New PRO Payment Received!</b>\n\n` +
+	const adminMsg = `💰 <b>NEW PRO PAYMENT ALERT</b>\n` +
+		`━━━━━━━━━━━━━━━━━━━━━━\n` +
 		`👤 <b>User:</b> @${escapeHtml(username)}\n` +
 		`🆔 <b>ID:</b> <code>${tgId}</code>\n` +
 		`🔗 <b>TxID:</b> <code>${escapeHtml(txid)}</code>\n\n` +
 		`🔍 <a href="https://tronscan.org/#/transaction/${escapeHtml(txid)}">Verify on TronScan</a>\n\n` +
-		`⚙️ <b>Action:</b> Click the command below to approve:\n` +
+		`⚙️ <b>Quick Action (Tap to approve):</b>\n` +
 		`<code>/tier ${tgId} pro</code>`;
 
 	try {
-		// Notify Admin
 		await ctx.api.sendMessage(env.ADMIN_TG_ID, adminMsg, { parse_mode: 'HTML', disable_web_page_preview: true });
 		
-		// Notify User
-		await ctx.reply('✅ <b>Payment Submitted Successfully!</b>\n\nYour transaction has been sent to the admins for verification. You will receive a notification once your PRO status is activated.', { parse_mode: 'HTML' });
+		const successMsg = `✅ <b>Payment Submitted Successfully!</b>\n` +
+			`━━━━━━━━━━━━━━━━━━━━━━\n` +
+			`Your TxID has been sent to our billing system. You will receive a direct notification once your <b>PRO status</b> is activated.\n\n` +
+			`<i>Thank you for supporting ReconBox!</i>`;
+		await ctx.reply(successMsg, { parse_mode: 'HTML' });
 	} catch (e) {
 		console.error("Failed to notify admin", e);
-		await ctx.reply('⚠️ <b>System Error:</b> Could not contact the admin. Please message support directly.', { parse_mode: 'HTML' });
+		await ctx.reply('⚠️ <b>System Error:</b> Could not contact the billing admin. Please message support directly.', { parse_mode: 'HTML' });
 	}
 }
