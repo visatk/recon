@@ -1,9 +1,9 @@
 export interface Env {
+	TELEGRAM_BOT_TOKEN: string;
+	ADMIN_TG_ID: string;
+	TRC20_WALLET: string;
 	DB: D1Database;
 	Sandbox: any;
-	BOT_TOKEN: string;
-	ADMIN_TG_ID: string;
-	TRC20_WALLET?: string;
 	SCAN_QUEUE: Queue<ScanJob>;
 	REPORTS_BUCKET: R2Bucket;
 }
@@ -19,10 +19,10 @@ export type ScanJob = {
 };
 
 export interface UserRow {
-	id: number;
 	tg_id: number;
 	username: string;
 	tier: 'free' | 'pro';
 	credits: number;
 	last_reset_at: string;
+	created_at: string;
 }
