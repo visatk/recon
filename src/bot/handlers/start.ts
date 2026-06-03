@@ -15,7 +15,10 @@ export async function handleStart(ctx: CommandContext<Context>, env: Env) {
 		await ctx.reply(
 			'🛡️ *Welcome to ReconBox*\n\n' +
 			'_Anonymous, Ephemeral, and Blazing Fast Browser Security Sandbox._\n\n' +
-			'Use `/recon <domain>` to safely launch an isolated network scan or port inspection.',
+			'📌 *Available Commands:*\n' +
+			'🔹 `/recon <domain>` - Run full automated deep recon.\n' +
+			'🔹 `/cli <command>` - Run custom tool commands (e.g., `/cli nmap -sV target.com`).\n' +
+			'🔹 `/me` - Check your account credits.',
 			{ parse_mode: 'Markdown' }
 		);
 	} catch (error) {
