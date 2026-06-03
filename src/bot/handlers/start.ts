@@ -13,18 +13,18 @@ export async function handleStart(ctx: CommandContext<Context>, env: Env) {
 		const dbClient = new DbClient(env.DB);
 		await dbClient.getOrCreateUser(tgId, username);
 
-		// Premium UI formatting
 		const msg = `🛡️ <b>Welcome to ReconBox, ${escapeHtml(username)}!</b>\n\n` +
-			`<i>Your Anonymous, Ephemeral, and Blazing Fast Security Sandbox.</i>\n\n` +
-			`📌 <b>Available Commands:</b>\n` +
-			`🔹 <code>/recon example.com</code> - Full automated deep recon\n` +
-			`🔹 <code>/cli nmap -sV target.com</code> - Run custom OSINT tools\n` +
-			`🔹 <code>/me</code> - Check your account limits\n\n` +
-			`<i>🔒 All containers are destroyed immediately after execution.</i>`;
+			`<i>Your Anonymous, Ephemeral, and Blazing Fast Security Sandbox. Built for elite Bug Bounty Hunters.</i>\n\n` +
+			`📌 <b>Core Commands:</b>\n` +
+			`🔹 <code>/recon target.com</code> - Instant Attack Surface Discovery\n` +
+			`🔹 <code>/cli nmap -F target.com</code> - Run isolated OSINT tools\n` +
+			`🔹 <code>/me</code> - Check your limits & upgrade\n\n` +
+			`<i>🔒 Zero Logs. 100% Isolated. Containers self-destruct upon execution.</i>`;
 
 		const keyboard = new InlineKeyboard()
-			.url('📖 View Docs', 'https://telegra.ph/Bot-Usage--Available-Tools-06-03')
-			.url('👨‍💻 Developer', 'https://t.me/drkingbd');
+			.url('📖 View Documentation', 'https://telegra.ph/Bot-Usage--Available-Tools-06-03')
+			.row()
+			.url('👨‍💻 Contact Founder', 'https://t.me/drkingbd');
 
 		await ctx.reply(msg, { parse_mode: 'HTML', reply_markup: keyboard });
 	} catch (error) {
