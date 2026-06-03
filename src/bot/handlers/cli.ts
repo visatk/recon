@@ -16,7 +16,6 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env, executio
 		return ctx.reply('⚠️ <b>Please provide a command.</b>\nExample: <code>/cli nmap -F target.com</code>', { parse_mode: 'HTML' });
 	}
 
-	// Security: Prevent Shell Command Injection (Updated Regex for \n and \r)
 	if (/[;&|`$\n\r]/.test(rawCommand) || rawCommand.includes('>') || rawCommand.includes('<')) {
 		return ctx.reply('❌ <b>Security Alert:</b> Shell chaining operators (;, &, |, $, \\n, >) are strictly prohibited.', { parse_mode: 'HTML' });
 	}
@@ -30,11 +29,12 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env, executio
 	try {
 		const access = await dbClient.checkCredits(tgId);
 		if (!access.allowed) return ctx.reply('❌ <b>Credit Limit Reached.</b>', { parse_mode: 'HTML' });
-
+		
+		const isPro = access.tier === 'pro';
 		const logTarget = rawCommand.length > 100 ? rawCommand.substring(0, 100) + '...' : rawCommand;
 		const scanId = await dbClient.createScan(tgId, logTarget, baseTool);
 
-		if (access.tier === 'free') await dbClient.deductCredit(tgId);
+		if (!isPro) await dbClient.deductCredit(tgId);
 
 		const progress = await ctx.reply(`⏳ <b>Executing:</b> <code>${escapeHtml(rawCommand)}</code>`, { parse_mode: 'HTML' });
 		await ctx.replyWithChatAction('typing').catch(() => {});
@@ -48,9 +48,10 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env, executio
 				let sandbox = null;
 				try {
 					await dbClient.updateScanStatus(scanId, 'running');
-					sandbox = getSandbox(env.Sandbox, crypto.randomUUID(), { sleepAfter: '2m' });
+					sandbox = getSandbox(env.Sandbox, crypto.randomUUID(), { sleepAfter: isPro ? '5m' : '2m' });
 
-					const result = await sandbox.exec(rawCommand, { timeout: 60000 });
+					// PRO gets 120s timeout, Free gets 60s
+					const result = await sandbox.exec(rawCommand, { timeout: isPro ? 120000 : 60000 });
 					const output = result.stdout || result.stderr || '[No Output]';
 
 					if (output.length > 3900) {
