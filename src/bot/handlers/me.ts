@@ -10,11 +10,9 @@ export async function handleMe(ctx: CommandContext<Context>, env: Env) {
 	try {
 		const dbClient = new DbClient(env.DB);
 		const user = await dbClient.getOrCreateUser(tgId, ctx.from?.username || 'Unknown');
-
 		if (!user) return ctx.reply('⚠️ <b>Profile not found.</b> Run /start first.', { parse_mode: 'HTML' });
 
 		const isPro = user.tier === 'pro';
-
 		let msg = `👤 <b>ACCOUNT DASHBOARD</b>\n` +
 				  `━━━━━━━━━━━━━━━━━━━━━━\n` +
 				  `📝 <b>User:</b> ${escapeHtml(user.username)}\n` +
@@ -23,14 +21,9 @@ export async function handleMe(ctx: CommandContext<Context>, env: Env) {
 		const keyboard = new InlineKeyboard();
 
 		if (isPro) {
-			msg += `💎 <b>Plan:</b> ⭐ <b>PRO ACCESS</b> ⭐\n` +
-				   `⚡ <b>Credits:</b> ♾️ <b>Unlimited</b>\n\n` +
-				   `<i>🚀 You have unlocked Max Execution Time & Deep Scans!</i>`;
+			msg += `💎 <b>Plan:</b> ⭐ <b>PRO ACCESS</b> ⭐\n⚡ <b>Credits:</b> ♾️ <b>Unlimited</b>\n\n<i>🚀 You have unlocked Max Execution Time & Deep Scans!</i>`;
 		} else {
-			msg += `💎 <b>Plan:</b> <b>FREE TIER</b>\n` +
-				   `⚡ <b>Credits Left:</b> <b>${user.credits} / 5</b>\n\n` +
-				   `<i>🔄 Free credits reset every 24 hours.</i>`;
-			keyboard.text('🚀 Upgrade to PRO', 'upgrade_prompt'); // Assuming you handle this callback or just point to /upgrade
+			msg += `💎 <b>Plan:</b> <b>FREE TIER</b>\n⚡ <b>Credits Left:</b> <b>${user.credits} / 5</b>\n\n<i>🔄 Free credits reset every 24 hours.</i>`;
 		}
 
 		await ctx.reply(msg, { parse_mode: 'HTML' });
