@@ -1,27 +1,28 @@
-import { Sandbox } from '@cloudflare/sandbox';
-
 export interface Env {
-	TELEGRAM_BOT_TOKEN: string;
-	ADMIN_TG_ID: string;
-	TRC20_WALLET: string;
 	DB: D1Database;
-	Sandbox: DurableObjectNamespace<Sandbox>;
+	Sandbox: any;
+	BOT_TOKEN: string;
+	ADMIN_TG_ID: string;
+	TRC20_WALLET?: string;
+	SCAN_QUEUE: Queue<ScanJob>;
+	REPORTS_BUCKET: R2Bucket;
 }
 
+export type ScanJob = {
+	type: 'recon' | 'cli';
+	tgId: number;
+	chatId: number;
+	messageId: number;
+	scanId: number;
+	payload: string;
+	isPro: boolean;
+};
+
 export interface UserRow {
+	id: number;
 	tg_id: number;
 	username: string;
 	tier: 'free' | 'pro';
 	credits: number;
 	last_reset_at: string;
-	created_at: string;
-}
-
-export interface ScanRow {
-	id: number;
-	tg_id: number;
-	target: string;
-	tool: string;
-	status: 'pending' | 'running' | 'completed' | 'failed';
-	created_at: string;
 }
