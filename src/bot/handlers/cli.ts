@@ -2,7 +2,7 @@ import { CommandContext, Context, InputFile } from 'grammy';
 import { Env } from '../../types';
 import { DbClient } from '../../db/client';
 import { getSandbox } from '@cloudflare/sandbox';
-import { formatOutput, escapeHtml } from '../../utils/ui';
+import { escapeHtml } from '../../utils/ui';
 
 const ALLOWED_TOOLS = ['nmap', 'subfinder', 'httpx', 'whois', 'dig', 'curl', 'wget', 'jq', 'grep', 'cat', 'echo', 'ls'];
 
@@ -14,6 +14,11 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env, executio
 
 	if (!rawCommand) {
 		return ctx.reply('⚠️ <b>Please provide a command.</b>\nExample: <code>/cli nmap -sV target.com</code>', { parse_mode: 'HTML' });
+	}
+
+	// Security: Prevent Shell Command Injection
+	if (/[;&|`$]/.test(rawCommand) || rawCommand.includes('>') || rawCommand.includes('<')) {
+		return ctx.reply('❌ <b>Security Alert:</b> Shell chaining operators (;, &, |, $, >) are strictly prohibited.', { parse_mode: 'HTML' });
 	}
 
 	const baseTool = rawCommand.split(' ')[0].toLowerCase();
@@ -32,7 +37,6 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env, executio
 		if (access.tier === 'free') await dbClient.deductCredit(tgId);
 
 		const progress = await ctx.reply(`⏳ <b>Executing:</b> <code>${escapeHtml(rawCommand)}</code>`, { parse_mode: 'HTML' });
-		
 		await ctx.replyWithChatAction('typing').catch(() => {});
 
 		const safeEdit = async (text: string) => {
