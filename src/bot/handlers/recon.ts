@@ -58,21 +58,24 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					};
 
 					await safeEdit(`🔍 <b>[2/5]</b> Enumerating Subdomains (Subfinder)...`);
-					await safeExec(`subfinder -d ${domain} -all -silent -max-time 20 > /workspace/subs.txt`, 25000);
-					const subResult = await safeExec(`cat /workspace/subs.txt`, 5000);
+					await safeExec(`subfinder -d ${domain} -all -silent -max-time 10 > /workspace/subs.txt`, 15000);
+					
+					// Fixed: Prevent crash if subs.txt is not created
+					const subResult = await safeExec(`cat /workspace/subs.txt 2>/dev/null || echo ""`, 5000);
 					
 					const subList = (subResult.stdout || '').split('\n').filter(s => s.trim().length > 0);
 					const subCount = subList.length;
 
 					await safeEdit(`🔍 <b>[3/5]</b> Probing ${subCount > 0 ? subCount : 1} targets for Tech Stack (Httpx)...`);
 					const httpxTarget = subCount > 0 ? 'cat /workspace/subs.txt' : `echo ${domain}`;
-					const httpxResult = await safeExec(`${httpxTarget} | httpx -silent -sc -td -server -ip -cname -title`, 35000);
+					const httpxResult = await safeExec(`${httpxTarget} | httpx -silent -sc -td -server -ip -cname -title`, 25000);
 
-					await safeEdit(`🔍 <b>[4/5]</b> Scanning Open Ports & Service Versions (Nmap)...`);
-					const nmapResult = await safeExec(`nmap -sT -sV -F -T4 --open -Pn ${domain}`, 40000);
+					await safeEdit(`🔍 <b>[4/5]</b> Scanning Open Ports & Services (Nmap)...`);
+					// Fixed: Removed -sV and used -F for faster execution to prevent Cloudflare Timeout
+					const nmapResult = await safeExec(`nmap -sT -F -T4 --open -Pn ${domain}`, 25000);
 
 					await safeEdit(`🔍 <b>[5/5]</b> Extracting Domain Identity (Whois)...`);
-					const whoisResult = await safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Expiry Date:|Name Server:|Registrant Organization:" | awk '{$1=$1;print}' | sort -u | head -n 10`, 15000);
+					const whoisResult = await safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Expiry Date:|Name Server:|Registrant Organization:" | awk '{$1=$1;print}' | sort -u | head -n 10`, 10000);
 
 					const subFormatted = subCount > 0 ? subList.slice(0, 15).join('\n') : 'No subdomains found.';
 
