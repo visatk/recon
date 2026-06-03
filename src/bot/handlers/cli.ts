@@ -36,12 +36,8 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env, executio
 
 		if (!isPro) await dbClient.deductCredit(tgId);
 
-		const progress = await ctx.reply(`⏳ <b>Executing:</b> <code>${escapeHtml(rawCommand)}</code>`, { parse_mode: 'HTML' });
+		const progress = await ctx.reply(`⏳ <b>Executing in isolated Sandbox:</b>\n<code>$ ${escapeHtml(rawCommand)}</code>`, { parse_mode: 'HTML' });
 		await ctx.replyWithChatAction('typing').catch(() => {});
-
-		const safeEdit = async (text: string) => {
-			try { await ctx.api.editMessageText(ctx.chat.id, progress.message_id, text, { parse_mode: 'HTML' }); } catch (e) {}
-		};
 
 		executionCtx.waitUntil(
 			(async () => {
@@ -50,8 +46,8 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env, executio
 					await dbClient.updateScanStatus(scanId, 'running');
 					sandbox = getSandbox(env.Sandbox, crypto.randomUUID(), { sleepAfter: isPro ? '5m' : '2m' });
 
-					// PRO gets 120s timeout, Free gets 60s
-					const result = await sandbox.exec(rawCommand, { timeout: isPro ? 120000 : 60000 });
+					// PRO gets 120s timeout, Free gets 45s
+					const result = await sandbox.exec(rawCommand, { timeout: isPro ? 120000 : 45000 });
 					const output = result.stdout || result.stderr || '[No Output]';
 
 					if (output.length > 3900) {
@@ -63,12 +59,13 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env, executio
 						await ctx.api.deleteMessage(ctx.chat.id, progress.message_id).catch(() => {});
 					} else {
 						const finalOut = `✅ <b>Execution Complete</b>\n<code>$ ${escapeHtml(rawCommand)}</code>\n\n<pre>${escapeHtml(output)}</pre>`;
-						await safeEdit(finalOut);
+						await ctx.api.editMessageText(ctx.chat.id, progress.message_id, finalOut, { parse_mode: 'HTML' });
 					}
 
 					await dbClient.updateScanStatus(scanId, 'completed');
 				} catch (err: any) {
-					await safeEdit(`❌ <b>Execution Failed:</b> <code>${escapeHtml(err.message)}</code>`);
+					const errorMsg = `❌ <b>Execution Failed:</b>\n<code>${escapeHtml(err.message)}</code>\n\n<i>Note: Commands taking too long will be killed automatically.</i>`;
+					await ctx.api.editMessageText(ctx.chat.id, progress.message_id, errorMsg, { parse_mode: 'HTML' }).catch(()=>{});
 					await dbClient.updateScanStatus(scanId, 'failed');
 				} finally {
 					if (sandbox) try { await sandbox.destroy(); } catch (e) {}
