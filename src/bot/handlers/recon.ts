@@ -2,6 +2,7 @@ import { CommandContext, Context } from 'grammy';
 import { Env } from '../../types';
 import { DbClient } from '../../db/client';
 import { getSandbox } from '@cloudflare/sandbox';
+import { formatOutput, escapeHtml } from '../../utils/ui';
 
 export async function handleRecon(ctx: CommandContext<Context>, env: Env, executionCtx: ExecutionContext) {
 	const tgId = ctx.from?.id;
@@ -10,10 +11,7 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 	if (!tgId) return;
 
 	if (!domain || !/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(domain)) {
-		await ctx.reply('⚠️ Invalid target format. Please enter a valid cleanly-formatted domain.\nExample: `/recon target.com`', {
-			parse_mode: 'Markdown',
-		});
-		return;
+		return ctx.reply('⚠️ <b>Invalid target format.</b>\nExample: <code>/recon target.com</code>', { parse_mode: 'HTML' });
 	}
 
 	const dbClient = new DbClient(env.DB);
@@ -21,103 +19,65 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 	try {
 		const access = await dbClient.checkCredits(tgId);
 		if (!access.allowed) {
-			await ctx.reply('❌ Credit Limit Reached. Daily limits are capped at 5 requests for free accounts.');
-			return;
+			return ctx.reply('❌ <b>Credit Limit Reached.</b>\nWait 24 hours for free credits to reset.', { parse_mode: 'HTML' });
 		}
 
 		const scanId = await dbClient.createScan(tgId, domain, 'multi-recon');
+		if (access.tier === 'free') await dbClient.deductCredit(tgId);
 
-		if (access.tier === 'free') {
-			await dbClient.deductCredit(tgId);
-		}
+		const progressMessage = await ctx.reply('⏳ <b>[1/3]</b> Provisioning isolated Sandbox...', { parse_mode: 'HTML' });
 
-		const progressMessage = await ctx.reply('⏳ *[1/3]* Provisioning isolated Sandbox container...', {
-			parse_mode: 'Markdown',
-		});
+		// Safe edit wrapper to avoid Telegram "not modified" crashes
+		const safeEdit = async (text: string) => {
+			try { await ctx.api.editMessageText(ctx.chat.id, progressMessage.message_id, text, { parse_mode: 'HTML' }); } catch (e) {}
+		};
 
 		executionCtx.waitUntil(
 			(async () => {
 				let sandbox = null;
 				try {
 					await dbClient.updateScanStatus(scanId, 'running');
+					await safeEdit(`🔍 <b>[2/3]</b> Sandbox initialized. Running Subfinder, Nmap, Httpx & Whois on <b>${escapeHtml(domain)}</b>...`);
 
-					await ctx.api.editMessageText(
-						ctx.chat.id,
-						progressMessage.message_id,
-						`🔍 *[2/3]* Running Subfinder, Nmap, Httpx & Whois concurrently on *${domain}*...`,
-						{ parse_mode: 'Markdown' }
-					);
+					const sandboxId = crypto.randomUUID();
+					sandbox = getSandbox(env.Sandbox, sandboxId, { sleepAfter: '2m' });
 
-					const sandboxInstanceId = crypto.randomUUID();
-					sandbox = getSandbox(env.Sandbox, sandboxInstanceId, { sleepAfter: '2m' });
-
-					// Helper function to prevent Promise.all from crashing if one tool fails or times out
-					const safeExec = async (cmd: string, timeoutMs: number) => {
-						try {
-							return await sandbox!.exec(cmd, { timeout: timeoutMs });
-						} catch (e: any) {
-							return { stdout: '', stderr: `[Timeout or Error: ${e.message}]`, exitCode: 1, success: false };
-						}
+					const safeExec = async (cmd: string, timeout: number) => {
+						try { return await sandbox!.exec(cmd, { timeout }); } 
+						catch (e: any) { return { stdout: '', stderr: `[Error: ${e.message}]`, success: false }; }
 					};
 
-					// 🚀 CONCURRENT EXECUTION
 					const [subResult, nmapResult, httpxResult, whoisResult] = await Promise.all([
 						safeExec(`subfinder -d ${domain} -silent -max-time 15`, 20000),
-						safeExec(`nmap -sT -F -T4 ${domain}`, 30000), // -sT explicitly used for user-space networking
+						safeExec(`nmap -sT -F -T4 ${domain}`, 30000),
 						safeExec(`echo ${domain} | httpx -silent -sc -td -title`, 20000),
-						safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Registry Expiry Date:" | head -n 4`, 15000)
+						safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Expiry Date:" | head -n 4`, 15000)
 					]);
 
-					// Extracting outputs safely (handling both stdout and stderr fallbacks)
-					const subLog = subResult.stdout || subResult.stderr || 'No subdomains found.';
-					const nmapLog = nmapResult.stdout || nmapResult.stderr || 'Host seems down or ports are filtered.';
-					const httpxLog = httpxResult.stdout || httpxResult.stderr || 'Target unresponsive to HTTP probes.';
-					const whoisLog = whoisResult.stdout || whoisResult.stderr || 'Whois data protected or unavailable.';
+					const subList = (subResult.stdout || '').split('\n').filter(s => s.trim().length > 0);
+					const subFormatted = subList.length > 0 ? subList.slice(0, 10).join('\n') : 'No subdomains found.';
 
-					let formattedText = `✅ *Deep Recon Complete: ${domain}*\n\n`;
-					
-					formattedText += `🌐 *Web Tech (Httpx):*\n\`\`\`\n${httpxLog.trim()}\n\`\`\`\n`;
-					formattedText += `ℹ️ *Domain Info:*\n\`\`\`\n${whoisLog.trim()}\n\`\`\`\n`;
-					
-					// Safely split and slice subdomains
-					const subList = subLog.split('\n').filter(s => s.trim().length > 0);
-					formattedText += `🔗 *Subdomains (Top 10 of ${subList.length}):*\n\`\`\`\n${subList.slice(0, 10).join('\n')}\n\`\`\`\n`;
-					
-					formattedText += `🛡️ *Port Scan (Nmap):*\n\`\`\`\n${nmapLog.trim().substring(0, 800)}\n\`\`\``;
-					
-					if (formattedText.length > 4000) {
-						formattedText = formattedText.substring(0, 3950) + '\n... [Data truncated]```';
+					let finalOut = `✅ <b>Deep Recon Complete:</b> <code>${escapeHtml(domain)}</code>\n\n`;
+					finalOut += formatOutput('🌐 Web Tech (Httpx):', httpxResult.stdout || httpxResult.stderr);
+					finalOut += formatOutput('ℹ️ Domain Info:', whoisResult.stdout || whoisResult.stderr);
+					finalOut += formatOutput(`🔗 Subdomains (Top 10 of ${subList.length}):`, subFormatted);
+					finalOut += formatOutput('🛡️ Port Scan (Nmap):', (nmapResult.stdout || nmapResult.stderr).substring(0, 800));
+
+					if (finalOut.length > 4000) {
+						finalOut = finalOut.substring(0, 3950) + '\n... [Truncated for Telegram limits]</pre>';
 					}
 
-					await ctx.api.editMessageText(ctx.chat.id, progressMessage.message_id, formattedText, {
-						parse_mode: 'Markdown',
-					});
-
+					await safeEdit(finalOut);
 					await dbClient.updateScanStatus(scanId, 'completed');
-				} catch (sandboxError: any) {
-					console.error('Asynchronous scanning pipeline exception caught:', sandboxError);
-					await ctx.api.editMessageText(
-						ctx.chat.id,
-						progressMessage.message_id,
-						`❌ *Analysis Pipeline Aborted*\nSandbox orchestration failed: \`${sandboxError.message || 'Execution Timeout'}\``,
-						{ parse_mode: 'Markdown' }
-					);
+				} catch (err: any) {
+					await safeEdit(`❌ <b>Execution Failed:</b> <code>${escapeHtml(err.message)}</code>`);
 					await dbClient.updateScanStatus(scanId, 'failed');
 				} finally {
-					// 🧹 CRITICAL: Immediately destroy ephemeral container to prevent memory leaks and billing hits
-					if (sandbox) {
-						try {
-							await sandbox.destroy();
-						} catch (destructionError) {
-							console.error('Resource lifecycle deallocation failed:', destructionError);
-						}
-					}
+					if (sandbox) try { await sandbox.destroy(); } catch (e) {}
 				}
 			})()
 		);
-
-	} catch (pipelineError) {
-		console.error('Failed to trigger background scan operation:', pipelineError);
-		await ctx.reply('⚠️ Infrastructure exception occurred. Unable to route command payload into security mesh.');
+	} catch (error) {
+		await ctx.reply('⚠️ <b>System Error:</b> Could not process request.', { parse_mode: 'HTML' });
 	}
 }
