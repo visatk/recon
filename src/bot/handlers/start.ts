@@ -23,8 +23,8 @@ export async function handleStart(ctx: CommandContext<Context>, env: Env) {
 			`<i>🔒 All containers are destroyed immediately after execution.</i>`;
 
 		const keyboard = new InlineKeyboard()
-			.url('📖 View Documentation', 'https://github.com')
-			.url('👨‍💻 Developer Support', 'https://t.me/your_channel_or_username');
+			.url('📖 View Docs', 'https://telegra.ph/Bot-Usage--Available-Tools-06-03')
+			.url('👨‍💻 Developer', 'https://t.me/drkingbd');
 
 		await ctx.reply(msg, { parse_mode: 'HTML', reply_markup: keyboard });
 	} catch (error) {
