@@ -8,7 +8,6 @@ export class DbClient {
 	}
 
 	async getOrCreateUser(tgId: number, username: string): Promise<UserRow | null> {
-		// Optimized: 1 single query using RETURNING *
 		let user = await this.db
 			.prepare(`INSERT INTO users (tg_id, username) VALUES (?, ?) 
 					  ON CONFLICT(tg_id) DO UPDATE SET username = excluded.username 
@@ -17,7 +16,9 @@ export class DbClient {
 			.first<UserRow>();
 
 		if (user && user.tier === 'free') {
-			const lastReset = new Date(user.last_reset_at).getTime();
+			// Fix: Convert SQLite YYYY-MM-DD HH:MM:SS format to proper UTC standard format
+			const safeDateString = user.last_reset_at.replace(' ', 'T') + 'Z';
+			const lastReset = new Date(safeDateString).getTime();
 			const now = Date.now();
 			
 			if (now - lastReset > 24 * 60 * 60 * 1000) {
