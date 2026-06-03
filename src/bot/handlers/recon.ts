@@ -26,8 +26,6 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 		if (access.tier === 'free') await dbClient.deductCredit(tgId);
 
 		const progressMessage = await ctx.reply('⏳ <b>[1/3]</b> Provisioning isolated Sandbox...', { parse_mode: 'HTML' });
-		
-		// Trigger initial ChatAction
 		await ctx.replyWithChatAction('typing').catch(() => {});
 
 		const safeEdit = async (text: string) => {
@@ -39,22 +37,20 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 				let sandbox = null;
 				try {
 					await dbClient.updateScanStatus(scanId, 'running');
-					await safeEdit(`🔍 <b>[2/3]</b> Sandbox initialized. Running Subfinder, Nmap, Httpx & Whois on <b>${escapeHtml(domain)}</b>...`);
+					await safeEdit(`🔍 <b>[2/3]</b> Sandbox initialized. Running Recon tools sequentially on <b>${escapeHtml(domain)}</b> to prevent limits...`);
 
-					const sandboxId = crypto.randomUUID();
-					sandbox = getSandbox(env.Sandbox, sandboxId, { sleepAfter: '2m' });
+					sandbox = getSandbox(env.Sandbox, crypto.randomUUID(), { sleepAfter: '2m' });
 
 					const safeExec = async (cmd: string, timeout: number) => {
 						try { return await sandbox!.exec(cmd, { timeout }); } 
 						catch (e: any) { return { stdout: '', stderr: `[Error: ${e.message}]`, success: false }; }
 					};
 
-					const [subResult, nmapResult, httpxResult, whoisResult] = await Promise.all([
-						safeExec(`subfinder -d ${domain} -silent -max-time 15`, 20000),
-						safeExec(`nmap -sT -F -T4 ${domain}`, 30000),
-						safeExec(`echo ${domain} | httpx -silent -sc -td -title`, 20000),
-						safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Expiry Date:" | head -n 4`, 15000)
-					]);
+					// Executing sequentially to avoid Sandbox CPU/Memory OutOfMemory kills
+					const subResult = await safeExec(`subfinder -d ${domain} -silent -max-time 15`, 20000);
+					const whoisResult = await safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Expiry Date:" | head -n 4`, 15000);
+					const nmapResult = await safeExec(`nmap -sT -F -T4 ${domain}`, 30000);
+					const httpxResult = await safeExec(`echo ${domain} | httpx -silent -sc -td -title`, 20000);
 
 					const subList = (subResult.stdout || '').split('\n').filter(s => s.trim().length > 0);
 					const subFormatted = subList.length > 0 ? subList.slice(0, 10).join('\n') : 'No subdomains found.';
@@ -65,7 +61,6 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					finalOut += formatOutput(`🔗 Subdomains (Top 10 of ${subList.length}):`, subFormatted);
 					finalOut += formatOutput('🛡️ Port Scan (Nmap):', (nmapResult.stdout || nmapResult.stderr).substring(0, 800));
 
-					// If output exceeds Telegram's 4096 character limit, send as a .txt file
 					if (finalOut.length > 3900) {
 						const rawText = `Deep Recon Report for ${domain}\n\nWeb Tech:\n${httpxResult.stdout}\n\nDomain Info:\n${whoisResult.stdout}\n\nSubdomains:\n${subResult.stdout}\n\nNmap:\n${nmapResult.stdout}`;
 						const fileBytes = new Uint8Array(new TextEncoder().encode(rawText));
@@ -74,7 +69,6 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 							caption: `✅ <b>Deep Recon Complete:</b> <code>${escapeHtml(domain)}</code>\n⚠️ Output too large, see attached report.`,
 							parse_mode: 'HTML'
 						});
-						// Clean up the progress message
 						await ctx.api.deleteMessage(ctx.chat.id, progressMessage.message_id).catch(() => {});
 					} else {
 						await safeEdit(finalOut);
