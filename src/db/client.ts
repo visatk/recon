@@ -8,27 +8,27 @@ export class DbClient {
 	}
 
 	async getOrCreateUser(tgId: number, username: string): Promise<UserRow | null> {
-		let user = await this.db
+		// Insert or Update user
+		await this.db
 			.prepare(`INSERT INTO users (tg_id, username) VALUES (?, ?) 
-					  ON CONFLICT(tg_id) DO UPDATE SET username = excluded.username 
-					  RETURNING *`)
+					  ON CONFLICT(tg_id) DO UPDATE SET username = excluded.username`)
 			.bind(tgId, username)
+			.run();
+
+		// Auto-reset free credits after 24 hours using raw SQLite date logic
+		await this.db
+			.prepare(`UPDATE users 
+					  SET credits = 5, last_reset_at = CURRENT_TIMESTAMP 
+					  WHERE tg_id = ? AND tier = 'free' 
+					  AND datetime(last_reset_at) <= datetime('now', '-1 day')`)
+			.bind(tgId)
+			.run();
+
+		// Fetch the final user state
+		return await this.db
+			.prepare(`SELECT * FROM users WHERE tg_id = ?`)
+			.bind(tgId)
 			.first<UserRow>();
-
-		if (user && user.tier === 'free') {
-			const safeDateString = user.last_reset_at.replace(' ', 'T') + 'Z';
-			const lastReset = new Date(safeDateString).getTime();
-			const now = Date.now();
-			
-			if (now - lastReset > 24 * 60 * 60 * 1000) {
-				user = await this.db
-					.prepare(`UPDATE users SET credits = 5, last_reset_at = CURRENT_TIMESTAMP WHERE tg_id = ? RETURNING *`)
-					.bind(tgId)
-					.first<UserRow>();
-			}
-		}
-
-		return user;
 	}
 
 	async checkCredits(tgId: number): Promise<{ allowed: boolean; tier: string; credits: number }> {
