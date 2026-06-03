@@ -9,7 +9,6 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 
 	if (!tgId) return;
 
-	// Input Sanitation: Mitigate shell command injection vectors at the input boundary
 	if (!domain || !/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(domain)) {
 		await ctx.reply('⚠️ Invalid target format. Please enter a valid cleanly-formatted domain.\nExample: `/recon target.com`', {
 			parse_mode: 'Markdown',
@@ -26,7 +25,6 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 			return;
 		}
 
-		// Update tool name in DB to reflect multiple tools
 		const scanId = await dbClient.createScan(tgId, domain, 'multi-recon');
 
 		if (access.tier === 'free') {
@@ -37,7 +35,6 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 			parse_mode: 'Markdown',
 		});
 
-		// Defer processing to background event loops via waitUntil to instantly answer the incoming Telegram webhook
 		executionCtx.waitUntil(
 			(async () => {
 				let sandbox = null;
@@ -52,36 +49,42 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					);
 
 					const sandboxInstanceId = crypto.randomUUID();
-					sandbox = getSandbox(env.Sandbox, sandboxInstanceId, { sleepAfter: '5m' });
+					sandbox = getSandbox(env.Sandbox, sandboxInstanceId, { sleepAfter: '2m' });
 
-					// 🚀 CONCURRENT EXECUTION: Running 4 heavy tools perfectly in parallel
-					// Cloudflare Sandbox can handle multiple shell executions simultaneously
+					// Helper function to prevent Promise.all from crashing if one tool fails or times out
+					const safeExec = async (cmd: string, timeoutMs: number) => {
+						try {
+							return await sandbox!.exec(cmd, { timeout: timeoutMs });
+						} catch (e: any) {
+							return { stdout: '', stderr: `[Timeout or Error: ${e.message}]`, exitCode: 1, success: false };
+						}
+					};
+
+					// 🚀 CONCURRENT EXECUTION
 					const [subResult, nmapResult, httpxResult, whoisResult] = await Promise.all([
-						// 1. Find Subdomains
-						sandbox.exec(`subfinder -d ${domain} -silent -max-time 15`, { timeout: 20000 }),
-						// 2. Fast Port Scan
-						sandbox.exec(`nmap -F -T4 ${domain}`, { timeout: 30000 }),
-						// 3. Tech Stack & Status Code Detection
-						sandbox.exec(`echo ${domain} | httpx -silent -sc -td -title`, { timeout: 20000 }),
-						// 4. Domain Info Extraction (Filtered for clean output)
-						sandbox.exec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Registry Expiry Date:" | head -n 4`, { timeout: 15000 })
+						safeExec(`subfinder -d ${domain} -silent -max-time 15`, 20000),
+						safeExec(`nmap -sT -F -T4 ${domain}`, 30000), // -sT explicitly used for user-space networking
+						safeExec(`echo ${domain} | httpx -silent -sc -td -title`, 20000),
+						safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Registry Expiry Date:" | head -n 4`, 15000)
 					]);
 
-					// Extracting outputs safely
-					const subLog = subResult.stdout || 'No subdomains found.';
-					const nmapLog = nmapResult.stdout || 'Host seems down or ports are filtered.';
-					const httpxLog = httpxResult.stdout || 'Target unresponsive to HTTP probes.';
-					const whoisLog = whoisResult.stdout || 'Whois data protected or unavailable.';
+					// Extracting outputs safely (handling both stdout and stderr fallbacks)
+					const subLog = subResult.stdout || subResult.stderr || 'No subdomains found.';
+					const nmapLog = nmapResult.stdout || nmapResult.stderr || 'Host seems down or ports are filtered.';
+					const httpxLog = httpxResult.stdout || httpxResult.stderr || 'Target unresponsive to HTTP probes.';
+					const whoisLog = whoisResult.stdout || whoisResult.stderr || 'Whois data protected or unavailable.';
 
-					// Formatting the dynamic dashboard output for Telegram
 					let formattedText = `✅ *Deep Recon Complete: ${domain}*\n\n`;
 					
 					formattedText += `🌐 *Web Tech (Httpx):*\n\`\`\`\n${httpxLog.trim()}\n\`\`\`\n`;
-					formattedText += `ℹ️ *Domain Info (Whois):*\n\`\`\`\n${whoisLog.trim()}\n\`\`\`\n`;
-					formattedText += `🔗 *Subdomains (Top 10):*\n\`\`\`\n${subLog.split('\n').slice(0, 10).join('\n')}\n\`\`\`\n`;
+					formattedText += `ℹ️ *Domain Info:*\n\`\`\`\n${whoisLog.trim()}\n\`\`\`\n`;
+					
+					// Safely split and slice subdomains
+					const subList = subLog.split('\n').filter(s => s.trim().length > 0);
+					formattedText += `🔗 *Subdomains (Top 10 of ${subList.length}):*\n\`\`\`\n${subList.slice(0, 10).join('\n')}\n\`\`\`\n`;
+					
 					formattedText += `🛡️ *Port Scan (Nmap):*\n\`\`\`\n${nmapLog.trim().substring(0, 800)}\n\`\`\``;
 					
-					// Enforce strict upper bound constraints matching Telegram API message sizing limits
 					if (formattedText.length > 4000) {
 						formattedText = formattedText.substring(0, 3950) + '\n... [Data truncated]```';
 					}
@@ -101,6 +104,7 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					);
 					await dbClient.updateScanStatus(scanId, 'failed');
 				} finally {
+					// 🧹 CRITICAL: Immediately destroy ephemeral container to prevent memory leaks and billing hits
 					if (sandbox) {
 						try {
 							await sandbox.destroy();
