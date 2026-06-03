@@ -6,7 +6,6 @@ import { escapeHtml } from '../../utils/ui';
 export async function handleStart(ctx: CommandContext<Context>, env: Env) {
 	const tgId = ctx.from?.id;
 	const username = ctx.from?.username || 'User';
-
 	if (!tgId) return;
 
 	try {
@@ -28,7 +27,6 @@ export async function handleStart(ctx: CommandContext<Context>, env: Env) {
 
 		await ctx.reply(msg, { parse_mode: 'HTML', reply_markup: keyboard });
 	} catch (error) {
-		console.error('Start Command Error:', error);
 		await ctx.reply('⚠️ <b>System Error:</b> Failed to initialize your profile.', { parse_mode: 'HTML' });
 	}
 }
