@@ -42,7 +42,6 @@ export class DbClient {
 		return { allowed: true, tier: user.tier, credits: user.credits };
 	}
 
-	// Concurrency Control: Check if user already has a scan running (Fixed Deadlock)
 	async hasActiveScan(tgId: number): Promise<boolean> {
 		const result = await this.db
 			.prepare(`
@@ -74,5 +73,28 @@ export class DbClient {
 
 	async deductCredit(tgId: number): Promise<void> {
 		await this.db.prepare(`UPDATE users SET credits = credits - 1 WHERE tg_id = ? AND tier = 'free'`).bind(tgId).run();
+	}
+
+	// ================== ADMIN FUNCTIONS ==================
+	
+	async setTier(tgId: number, tier: 'free' | 'pro'): Promise<boolean> {
+		const res = await this.db.prepare(`UPDATE users SET tier = ? WHERE tg_id = ?`).bind(tier, tgId).run();
+		return res.success;
+	}
+
+	async addCredits(tgId: number, amount: number): Promise<boolean> {
+		const res = await this.db.prepare(`UPDATE users SET credits = credits + ? WHERE tg_id = ?`).bind(amount, tgId).run();
+		return res.success;
+	}
+
+	async getSystemStats(): Promise<{ totalUsers: number; proUsers: number; totalScans: number }> {
+		const users = await this.db.prepare(`SELECT count(*) as c FROM users`).first<{c: number}>();
+		const pro = await this.db.prepare(`SELECT count(*) as c FROM users WHERE tier = 'pro'`).first<{c: number}>();
+		const scans = await this.db.prepare(`SELECT count(*) as c FROM scans`).first<{c: number}>();
+		return { 
+			totalUsers: users?.c || 0, 
+			proUsers: pro?.c || 0, 
+			totalScans: scans?.c || 0 
+		};
 	}
 }
