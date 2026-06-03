@@ -13,7 +13,6 @@ export const formatOutput = (title: string, content: string): string => {
 	return `<b>${title}</b>\n<pre>${safeContent || 'No output data'}</pre>\n`;
 };
 
-// New feature: Dynamic Progress Bar for UI/UX
 export const getProgressBar = (step: number, total: number): string => {
 	const filled = Math.round((step / total) * 10);
 	return `[${'█'.repeat(filled)}${'░'.repeat(10 - filled)}] ${Math.round((step / total) * 100)}%`;
