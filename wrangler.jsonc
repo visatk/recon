@@ -50,7 +50,7 @@
     "producers": [
       {
         "queue": "recon-scans",
-        "binding": "QUEUE"
+        "binding": "SCAN_QUEUE"
       }
     ],
     "consumers": [
@@ -64,7 +64,7 @@
   "r2_buckets": [
     {
       "bucket_name": "pipeline",
-      "binding": "BUCKET"
+      "binding": "REPORTS_BUCKET"
     }
   ]
 }
