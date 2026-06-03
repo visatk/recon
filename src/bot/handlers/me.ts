@@ -13,11 +13,20 @@ export async function handleMe(ctx: CommandContext<Context>, env: Env) {
 
 		if (!user) return ctx.reply('⚠️ Profile not found. Run /start first.');
 
-		const msg = `👤 <b>User Profile:</b> ${escapeHtml(user.username)}\n\n` +
-					`🆔 <b>ID:</b> <code>${user.tg_id}</code>\n` +
-					`💎 <b>Tier:</b> <b>${user.tier.toUpperCase()}</b>\n` +
-					`⚡ <b>Credits Remaining:</b> <b>${user.credits}</b>\n\n` +
-					`<i>🔄 Credits reset every 24 hours.</i>`;
+		const isPro = user.tier === 'pro';
+
+		let msg = `👤 <b>User Profile:</b> ${escapeHtml(user.username)}\n\n` +
+				  `🆔 <b>ID:</b> <code>${user.tg_id}</code>\n`;
+
+		if (isPro) {
+			msg += `💎 <b>Tier:</b> ⭐ <b>PRO ACCESS</b> ⭐\n` +
+				   `⚡ <b>Credits:</b> ♾️ <b>Unlimited</b>\n\n` +
+				   `<i>🚀 You have unlocked Deep Scanning and Max Execution Time!</i>`;
+		} else {
+			msg += `💎 <b>Tier:</b> <b>FREE</b>\n` +
+				   `⚡ <b>Credits Remaining:</b> <b>${user.credits}</b>\n\n` +
+				   `<i>🔄 Credits reset every 24 hours. Upgrade to PRO for unlimited access.</i>`;
+		}
 
 		await ctx.reply(msg, { parse_mode: 'HTML' });
 	} catch (error) {
