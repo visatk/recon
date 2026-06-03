@@ -1,10 +1,11 @@
-import { CommandContext, Context } from 'grammy';
+import { CommandContext, Context, InlineKeyboard } from 'grammy';
 import { Env } from '../../types';
 import { DbClient } from '../../db/client';
+import { escapeHtml } from '../../utils/ui';
 
 export async function handleStart(ctx: CommandContext<Context>, env: Env) {
 	const tgId = ctx.from?.id;
-	const username = ctx.from?.username || 'Unknown';
+	const username = ctx.from?.username || 'User';
 
 	if (!tgId) return;
 
@@ -12,17 +13,22 @@ export async function handleStart(ctx: CommandContext<Context>, env: Env) {
 		const dbClient = new DbClient(env.DB);
 		await dbClient.getOrCreateUser(tgId, username);
 
-		await ctx.reply(
-			'🛡️ *Welcome to ReconBox*\n\n' +
-			'_Anonymous, Ephemeral, and Blazing Fast Browser Security Sandbox._\n\n' +
-			'📌 *Available Commands:*\n' +
-			'🔹 `/recon <domain>` - Run full automated deep recon.\n' +
-			'🔹 `/cli <command>` - Run custom tool commands (e.g., `/cli nmap -sV target.com`).\n' +
-			'🔹 `/me` - Check your account credits.',
-			{ parse_mode: 'Markdown' }
-		);
+		// Premium UI formatting
+		const msg = `🛡️ <b>Welcome to ReconBox, ${escapeHtml(username)}!</b>\n\n` +
+			`<i>Your Anonymous, Ephemeral, and Blazing Fast Security Sandbox.</i>\n\n` +
+			`📌 <b>Available Commands:</b>\n` +
+			`🔹 <code>/recon example.com</code> - Full automated deep recon\n` +
+			`🔹 <code>/cli nmap -sV target.com</code> - Run custom OSINT tools\n` +
+			`🔹 <code>/me</code> - Check your account limits\n\n` +
+			`<i>🔒 All containers are destroyed immediately after execution.</i>`;
+
+		const keyboard = new InlineKeyboard()
+			.url('📖 View Documentation', 'https://github.com')
+			.url('👨‍💻 Developer Support', 'https://t.me/your_channel_or_username');
+
+		await ctx.reply(msg, { parse_mode: 'HTML', reply_markup: keyboard });
 	} catch (error) {
-		console.error('Error handling start command:', error);
-		await ctx.reply('⚠️ Failed to initialize your security profile. Please try again later.');
+		console.error('Start Command Error:', error);
+		await ctx.reply('⚠️ <b>System Error:</b> Failed to initialize your profile.', { parse_mode: 'HTML' });
 	}
 }
