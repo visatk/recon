@@ -42,10 +42,16 @@ export class DbClient {
 		return { allowed: true, tier: user.tier, credits: user.credits };
 	}
 
-	// Concurrency Control: Check if user already has a scan running
+	// Concurrency Control: Check if user already has a scan running (Fixed Deadlock)
 	async hasActiveScan(tgId: number): Promise<boolean> {
 		const result = await this.db
-			.prepare(`SELECT count(*) as count FROM scans WHERE tg_id = ? AND status IN ('pending', 'running')`)
+			.prepare(`
+				SELECT count(*) as count 
+				FROM scans 
+				WHERE tg_id = ? 
+				AND status IN ('pending', 'running') 
+				AND created_at >= datetime('now', '-5 minutes')
+			`)
 			.bind(tgId)
 			.first<{ count: number }>();
 		
