@@ -17,6 +17,7 @@
     "wrangler": "^4.94.0"
   },
   "dependencies": {
+    "@cloudflare/sandbox": "^0.11.0",
     "grammy": "^1.43.0"
   }
 }
