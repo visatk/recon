@@ -26,13 +26,13 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 			return;
 		}
 
-		const scanId = await dbClient.createScan(tgId, domain, 'nmap');
+		const scanId = await dbClient.createScan(tgId, domain, 'subfinder+nmap');
 
 		if (access.tier === 'free') {
 			await dbClient.deductCredit(tgId);
 		}
 
-		const progressMessage = await ctx.reply('⏳ *[1/3]* Spin-up isolated container sandbox environment...', {
+		const progressMessage = await ctx.reply('⏳ *[1/3]* Provisioning isolated Sandbox container...', {
 			parse_mode: 'Markdown',
 		});
 
@@ -46,19 +46,27 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					await ctx.api.editMessageText(
 						ctx.chat.id,
 						progressMessage.message_id,
-						`🔍 *[2/3]* Sandbox initialized. Running network inspection tool on *${domain}*...`,
+						`🔍 *[2/3]* Sandbox initialized. Running Subfinder & Nmap on *${domain}*...`,
 						{ parse_mode: 'Markdown' }
 					);
 
-					// Generate clean sandbox runtime scope using SDK standard helper interface
+					// Generate clean sandbox runtime scope using SDK standard helper interface & UUID
 					const sandboxInstanceId = crypto.randomUUID();
 					sandbox = getSandbox(env.Sandbox, sandboxInstanceId, { sleepAfter: '5m' });
 
-					// Using fast scan connect approach due to restricted network capabilities inside strict sandbox layers
-					const result = await sandbox.exec(`nmap -F -T4 ${domain}`, { timeout: 45000 });
-					const rawLog = result.stdout || result.stderr || 'Host verification completed without open listening ports.';
+					// 1. Subdomain Enumeration
+					const subResult = await sandbox.exec(`subfinder -d ${domain} -silent`, { timeout: 30000 });
+					const subLog = subResult.stdout || 'No subdomains found.';
 
-					let formattedText = `✅ *Scan Output Matrix for ${domain}*\n\n\`\`\`\n${rawLog}\n\`\`\``;
+					// 2. Fast Port Scanning
+					const nmapResult = await sandbox.exec(`nmap -F -T4 ${domain}`, { timeout: 45000 });
+					const nmapLog = nmapResult.stdout || nmapResult.stderr || 'No ports responded.';
+
+					// Formatting the output for Telegram
+					let formattedText = `✅ *Recon Complete for ${domain}*\n\n`;
+					formattedText += `🌐 *Subdomains:*\n\`\`\`\n${subLog.substring(0, 500)}\n\`\`\`\n`;
+					formattedText += `🛡️ *Port Scan:*\n\`\`\`\n${nmapLog.substring(0, 1500)}\n\`\`\``;
+					
 					// Enforce strict upper bound constraints matching Telegram API message sizing limits
 					if (formattedText.length > 4000) {
 						formattedText = formattedText.substring(0, 3950) + '\n... [Data truncated due to message length limits]```';
@@ -79,7 +87,7 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					);
 					await dbClient.updateScanStatus(scanId, 'failed');
 				} finally {
-					// Always execute resource lifecycle release handlers explicitly
+					// Always execute resource lifecycle release handlers explicitly to save quotas
 					if (sandbox) {
 						try {
 							await sandbox.destroy();
