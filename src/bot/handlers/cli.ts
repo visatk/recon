@@ -1,4 +1,4 @@
-import { CommandContext, Context } from 'grammy';
+import { CommandContext, Context, InputFile } from 'grammy';
 import { Env } from '../../types';
 import { DbClient } from '../../db/client';
 import { getSandbox } from '@cloudflare/sandbox';
@@ -32,6 +32,8 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env, executio
 		if (access.tier === 'free') await dbClient.deductCredit(tgId);
 
 		const progress = await ctx.reply(`⏳ <b>Executing:</b> <code>${escapeHtml(rawCommand)}</code>`, { parse_mode: 'HTML' });
+		
+		await ctx.replyWithChatAction('typing').catch(() => {});
 
 		const safeEdit = async (text: string) => {
 			try { await ctx.api.editMessageText(ctx.chat.id, progress.message_id, text, { parse_mode: 'HTML' }); } catch (e) {}
@@ -47,12 +49,18 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env, executio
 					const result = await sandbox.exec(rawCommand, { timeout: 60000 });
 					const output = result.stdout || result.stderr || '[No Output]';
 
-					let finalOut = `✅ <b>Execution Complete</b>\n<code>$ ${escapeHtml(rawCommand)}</code>\n\n`;
-					finalOut += `<pre>${escapeHtml(output)}</pre>`;
+					if (output.length > 3900) {
+						const fileBytes = new Uint8Array(new TextEncoder().encode(output));
+						await ctx.replyWithDocument(new InputFile(fileBytes, `cli_output.txt`), {
+							caption: `✅ <b>Execution Complete</b>\n<code>$ ${escapeHtml(rawCommand)}</code>`,
+							parse_mode: 'HTML'
+						});
+						await ctx.api.deleteMessage(ctx.chat.id, progress.message_id).catch(() => {});
+					} else {
+						const finalOut = `✅ <b>Execution Complete</b>\n<code>$ ${escapeHtml(rawCommand)}</code>\n\n<pre>${escapeHtml(output)}</pre>`;
+						await safeEdit(finalOut);
+					}
 
-					if (finalOut.length > 4000) finalOut = finalOut.substring(0, 3950) + '\n... [Truncated]</pre>';
-
-					await safeEdit(finalOut);
 					await dbClient.updateScanStatus(scanId, 'completed');
 				} catch (err: any) {
 					await safeEdit(`❌ <b>Execution Failed:</b> <code>${escapeHtml(err.message)}</code>`);
