@@ -2,6 +2,7 @@ import { Sandbox } from '@cloudflare/sandbox';
 
 export interface Env {
 	TELEGRAM_BOT_TOKEN: string;
+	ADMIN_TG_ID: string;
 	DB: D1Database;
 	Sandbox: DurableObjectNamespace<Sandbox>;
 }
