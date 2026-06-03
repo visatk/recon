@@ -6,7 +6,6 @@ export { Sandbox } from '@cloudflare/sandbox';
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		// HTTP Access Control Guard
 		if (request.method !== 'POST') {
 			return new Response(
 				JSON.stringify({ runtime: 'operational', system: 'ReconBox Secure Core Node' }),
