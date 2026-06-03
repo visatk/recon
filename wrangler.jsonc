@@ -45,20 +45,5 @@
 			"new_sqlite_classes": ["Sandbox"],
 			"tag": "v1"
 		}
-	],
-	"queues": {
-    "producers": [
-      {
-        "binding": "SCAN_QUEUE",
-        "queue": "recon-scans"
-      }
-    ],
-    "consumers": [
-      {
-        "queue": "recon-scans",
-        "max_batch_size": 1,
-        "max_concurrency": 10
-      }
-    ]
-  }
+	]
 }
