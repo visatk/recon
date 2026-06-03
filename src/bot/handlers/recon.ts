@@ -26,7 +26,8 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 			return;
 		}
 
-		const scanId = await dbClient.createScan(tgId, domain, 'subfinder+nmap');
+		// Update tool name in DB to reflect multiple tools
+		const scanId = await dbClient.createScan(tgId, domain, 'multi-recon');
 
 		if (access.tier === 'free') {
 			await dbClient.deductCredit(tgId);
@@ -46,30 +47,43 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					await ctx.api.editMessageText(
 						ctx.chat.id,
 						progressMessage.message_id,
-						`🔍 *[2/3]* Sandbox initialized. Running Subfinder & Nmap on *${domain}*...`,
+						`🔍 *[2/3]* Running Subfinder, Nmap, Httpx & Whois concurrently on *${domain}*...`,
 						{ parse_mode: 'Markdown' }
 					);
 
-					// Generate clean sandbox runtime scope using SDK standard helper interface & UUID
 					const sandboxInstanceId = crypto.randomUUID();
 					sandbox = getSandbox(env.Sandbox, sandboxInstanceId, { sleepAfter: '5m' });
 
-					// 1. Subdomain Enumeration
-					const subResult = await sandbox.exec(`subfinder -d ${domain} -silent`, { timeout: 30000 });
+					// 🚀 CONCURRENT EXECUTION: Running 4 heavy tools perfectly in parallel
+					// Cloudflare Sandbox can handle multiple shell executions simultaneously
+					const [subResult, nmapResult, httpxResult, whoisResult] = await Promise.all([
+						// 1. Find Subdomains
+						sandbox.exec(`subfinder -d ${domain} -silent -max-time 15`, { timeout: 20000 }),
+						// 2. Fast Port Scan
+						sandbox.exec(`nmap -F -T4 ${domain}`, { timeout: 30000 }),
+						// 3. Tech Stack & Status Code Detection
+						sandbox.exec(`echo ${domain} | httpx -silent -sc -td -title`, { timeout: 20000 }),
+						// 4. Domain Info Extraction (Filtered for clean output)
+						sandbox.exec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Registry Expiry Date:" | head -n 4`, { timeout: 15000 })
+					]);
+
+					// Extracting outputs safely
 					const subLog = subResult.stdout || 'No subdomains found.';
+					const nmapLog = nmapResult.stdout || 'Host seems down or ports are filtered.';
+					const httpxLog = httpxResult.stdout || 'Target unresponsive to HTTP probes.';
+					const whoisLog = whoisResult.stdout || 'Whois data protected or unavailable.';
 
-					// 2. Fast Port Scanning
-					const nmapResult = await sandbox.exec(`nmap -F -T4 ${domain}`, { timeout: 45000 });
-					const nmapLog = nmapResult.stdout || nmapResult.stderr || 'No ports responded.';
-
-					// Formatting the output for Telegram
-					let formattedText = `✅ *Recon Complete for ${domain}*\n\n`;
-					formattedText += `🌐 *Subdomains:*\n\`\`\`\n${subLog.substring(0, 500)}\n\`\`\`\n`;
-					formattedText += `🛡️ *Port Scan:*\n\`\`\`\n${nmapLog.substring(0, 1500)}\n\`\`\``;
+					// Formatting the dynamic dashboard output for Telegram
+					let formattedText = `✅ *Deep Recon Complete: ${domain}*\n\n`;
+					
+					formattedText += `🌐 *Web Tech (Httpx):*\n\`\`\`\n${httpxLog.trim()}\n\`\`\`\n`;
+					formattedText += `ℹ️ *Domain Info (Whois):*\n\`\`\`\n${whoisLog.trim()}\n\`\`\`\n`;
+					formattedText += `🔗 *Subdomains (Top 10):*\n\`\`\`\n${subLog.split('\n').slice(0, 10).join('\n')}\n\`\`\`\n`;
+					formattedText += `🛡️ *Port Scan (Nmap):*\n\`\`\`\n${nmapLog.trim().substring(0, 800)}\n\`\`\``;
 					
 					// Enforce strict upper bound constraints matching Telegram API message sizing limits
 					if (formattedText.length > 4000) {
-						formattedText = formattedText.substring(0, 3950) + '\n... [Data truncated due to message length limits]```';
+						formattedText = formattedText.substring(0, 3950) + '\n... [Data truncated]```';
 					}
 
 					await ctx.api.editMessageText(ctx.chat.id, progressMessage.message_id, formattedText, {
@@ -87,7 +101,6 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					);
 					await dbClient.updateScanStatus(scanId, 'failed');
 				} finally {
-					// Always execute resource lifecycle release handlers explicitly to save quotas
 					if (sandbox) {
 						try {
 							await sandbox.destroy();
