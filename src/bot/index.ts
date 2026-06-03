@@ -6,6 +6,8 @@ import { handleRecon } from './handlers/recon';
 import { handleMe } from './handlers/me';
 import { handleCli } from './handlers/cli';
 import { handleAdmin, handleTier, handleAddCredits } from './handlers/admin';
+import { handleHelp } from './handlers/help';
+import { handleUpgrade, handleTxid } from './handlers/upgrade';
 
 export function createBotHandler(env: Env, executionCtx: ExecutionContext) {
 	const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
@@ -15,13 +17,21 @@ export function createBotHandler(env: Env, executionCtx: ExecutionContext) {
 		retryOnInternalServerErrors: true 
 	}));
 
-	// User Commands
+	// General & Utility Commands
 	bot.command('start', (ctx) => handleStart(ctx, env));
+	bot.command('help', (ctx) => handleHelp(ctx, env));
+
+	// Core Security Commands
 	bot.command('recon', (ctx) => handleRecon(ctx, env, executionCtx));
-	bot.command('me', (ctx) => handleMe(ctx, env));
-	bot.command('stats', (ctx) => handleMe(ctx, env)); 
 	bot.command('cli', (ctx) => handleCli(ctx, env, executionCtx));
 	bot.command('run', (ctx) => handleCli(ctx, env, executionCtx)); 
+
+	// Account & Billing Commands
+	bot.command('me', (ctx) => handleMe(ctx, env));
+	bot.command('stats', (ctx) => handleMe(ctx, env)); 
+	bot.command('upgrade', (ctx) => handleUpgrade(ctx, env));
+	bot.command('buy', (ctx) => handleUpgrade(ctx, env));
+	bot.command('txid', (ctx) => handleTxid(ctx, env));
 
 	// Admin Commands
 	bot.command('admin', (ctx) => handleAdmin(ctx, env));
