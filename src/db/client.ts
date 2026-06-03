@@ -8,14 +8,12 @@ export class DbClient {
 	}
 
 	async getOrCreateUser(tgId: number, username: string): Promise<UserRow | null> {
-		// Insert or Update user
 		await this.db
 			.prepare(`INSERT INTO users (tg_id, username) VALUES (?, ?) 
 					  ON CONFLICT(tg_id) DO UPDATE SET username = excluded.username`)
 			.bind(tgId, username)
 			.run();
 
-		// Auto-reset free credits after 24 hours using raw SQLite date logic
 		await this.db
 			.prepare(`UPDATE users 
 					  SET credits = 5, last_reset_at = CURRENT_TIMESTAMP 
@@ -24,19 +22,11 @@ export class DbClient {
 			.bind(tgId)
 			.run();
 
-		// Fetch the final user state
-		return await this.db
-			.prepare(`SELECT * FROM users WHERE tg_id = ?`)
-			.bind(tgId)
-			.first<UserRow>();
+		return await this.db.prepare(`SELECT * FROM users WHERE tg_id = ?`).bind(tgId).first<UserRow>();
 	}
 
 	async checkCredits(tgId: number): Promise<{ allowed: boolean; tier: string; credits: number }> {
-		const user = await this.db
-			.prepare(`SELECT credits, tier FROM users WHERE tg_id = ?`)
-			.bind(tgId)
-			.first<{ credits: number; tier: string }>();
-
+		const user = await this.db.prepare(`SELECT credits, tier FROM users WHERE tg_id = ?`).bind(tgId).first<{ credits: number; tier: string }>();
 		if (!user) return { allowed: false, tier: 'free', credits: 0 };
 		if (user.tier === 'free' && user.credits <= 0) return { allowed: false, tier: user.tier, credits: user.credits };
 		return { allowed: true, tier: user.tier, credits: user.credits };
@@ -44,25 +34,13 @@ export class DbClient {
 
 	async hasActiveScan(tgId: number): Promise<boolean> {
 		const result = await this.db
-			.prepare(`
-				SELECT count(*) as count 
-				FROM scans 
-				WHERE tg_id = ? 
-				AND status IN ('pending', 'running') 
-				AND created_at >= datetime('now', '-5 minutes')
-			`)
-			.bind(tgId)
-			.first<{ count: number }>();
-		
+			.prepare(`SELECT count(*) as count FROM scans WHERE tg_id = ? AND status IN ('pending', 'running') AND created_at >= datetime('now', '-5 minutes')`)
+			.bind(tgId).first<{ count: number }>();
 		return (result?.count ?? 0) > 0;
 	}
 
 	async createScan(tgId: number, target: string, tool: string): Promise<number> {
-		const result = await this.db
-			.prepare(`INSERT INTO scans (tg_id, target, tool, status) VALUES (?, ?, ?, 'pending') RETURNING id`)
-			.bind(tgId, target, tool)
-			.first<{ id: number }>();
-
+		const result = await this.db.prepare(`INSERT INTO scans (tg_id, target, tool, status) VALUES (?, ?, ?, 'pending') RETURNING id`).bind(tgId, target, tool).first<{ id: number }>();
 		if (!result) throw new Error('DB Transaction Failed');
 		return result.id;
 	}
@@ -75,8 +53,6 @@ export class DbClient {
 		await this.db.prepare(`UPDATE users SET credits = credits - 1 WHERE tg_id = ? AND tier = 'free'`).bind(tgId).run();
 	}
 
-	// ================== ADMIN FUNCTIONS ==================
-	
 	async setTier(tgId: number, tier: 'free' | 'pro'): Promise<boolean> {
 		const res = await this.db.prepare(`UPDATE users SET tier = ? WHERE tg_id = ?`).bind(tier, tgId).run();
 		return res.success;
@@ -91,10 +67,6 @@ export class DbClient {
 		const users = await this.db.prepare(`SELECT count(*) as c FROM users`).first<{c: number}>();
 		const pro = await this.db.prepare(`SELECT count(*) as c FROM users WHERE tier = 'pro'`).first<{c: number}>();
 		const scans = await this.db.prepare(`SELECT count(*) as c FROM scans`).first<{c: number}>();
-		return { 
-			totalUsers: users?.c || 0, 
-			proUsers: pro?.c || 0, 
-			totalScans: scans?.c || 0 
-		};
+		return { totalUsers: users?.c || 0, proUsers: pro?.c || 0, totalScans: scans?.c || 0 };
 	}
 }
