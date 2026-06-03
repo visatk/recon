@@ -4,8 +4,12 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-06-02",
 	"compatibility_flags": [
-		"nodejs_compat"
-	],
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": "./public"
+  },
 	"observability": {
 		"enabled": true,
 		"head_sampling_rate": 0.1
