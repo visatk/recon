@@ -16,7 +16,6 @@ export class DbClient {
 			.first<UserRow>();
 
 		if (user && user.tier === 'free') {
-			// Fix: Convert SQLite YYYY-MM-DD HH:MM:SS format to proper UTC standard format
 			const safeDateString = user.last_reset_at.replace(' ', 'T') + 'Z';
 			const lastReset = new Date(safeDateString).getTime();
 			const now = Date.now();
@@ -41,6 +40,16 @@ export class DbClient {
 		if (!user) return { allowed: false, tier: 'free', credits: 0 };
 		if (user.tier === 'free' && user.credits <= 0) return { allowed: false, tier: user.tier, credits: user.credits };
 		return { allowed: true, tier: user.tier, credits: user.credits };
+	}
+
+	// Concurrency Control: Check if user already has a scan running
+	async hasActiveScan(tgId: number): Promise<boolean> {
+		const result = await this.db
+			.prepare(`SELECT count(*) as count FROM scans WHERE tg_id = ? AND status IN ('pending', 'running')`)
+			.bind(tgId)
+			.first<{ count: number }>();
+		
+		return (result?.count ?? 0) > 0;
 	}
 
 	async createScan(tgId: number, target: string, tool: string): Promise<number> {
