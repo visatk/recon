@@ -45,5 +45,26 @@
 			"new_sqlite_classes": ["Sandbox"],
 			"tag": "v1"
 		}
-	]
+	],
+	"queues": {
+    "producers": [
+      {
+        "queue": "recon-scans",
+        "binding": "QUEUE"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "recon-scans",
+        "max_batch_size": 100,
+        "max_batch_timeout": 30
+      }
+    ]
+  },
+  "r2_buckets": [
+    {
+      "bucket_name": "pipeline",
+      "binding": "BUCKET"
+    }
+  ]
 }
