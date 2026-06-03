@@ -1,16 +1,17 @@
 FROM docker.io/cloudflare/sandbox:0.11.0-python
 
-# Install additional Python packages
-RUN pip install --no-cache-dir \
-    scikit-learn==1.3.0 \
-    tensorflow==2.13.0 \
-    transformers==4.30.0
-
-# Install Node.js packages globally
-RUN npm install -g typescript ts-node prettier
-
-# Install system packages
+# Install Network Recon Tools (Nmap, wget, unzip, jq)
 RUN apt-get update && apt-get install -y \
-    postgresql-client \
-    redis-tools \
+    nmap wget unzip jq \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Install ProjectDiscovery's Subfinder via pre-compiled binary
+ENV SUBFINDER_VERSION="2.6.6"
+RUN wget -q "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_amd64.zip" -O subfinder.zip && \
+    unzip subfinder.zip -d /usr/local/bin/ && \
+    rm subfinder.zip && \
+    chmod +x /usr/local/bin/subfinder
+
+# Ensure standard execution workspace
+WORKDIR /workspace
