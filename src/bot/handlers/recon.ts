@@ -1,4 +1,4 @@
-import { CommandContext, Context } from 'grammy';
+import { CommandContext, Context, InputFile } from 'grammy';
 import { Env } from '../../types';
 import { DbClient } from '../../db/client';
 import { getSandbox } from '@cloudflare/sandbox';
@@ -26,8 +26,10 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 		if (access.tier === 'free') await dbClient.deductCredit(tgId);
 
 		const progressMessage = await ctx.reply('⏳ <b>[1/3]</b> Provisioning isolated Sandbox...', { parse_mode: 'HTML' });
+		
+		// Trigger initial ChatAction
+		await ctx.replyWithChatAction('typing').catch(() => {});
 
-		// Safe edit wrapper to avoid Telegram "not modified" crashes
 		const safeEdit = async (text: string) => {
 			try { await ctx.api.editMessageText(ctx.chat.id, progressMessage.message_id, text, { parse_mode: 'HTML' }); } catch (e) {}
 		};
@@ -63,11 +65,21 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					finalOut += formatOutput(`🔗 Subdomains (Top 10 of ${subList.length}):`, subFormatted);
 					finalOut += formatOutput('🛡️ Port Scan (Nmap):', (nmapResult.stdout || nmapResult.stderr).substring(0, 800));
 
-					if (finalOut.length > 4000) {
-						finalOut = finalOut.substring(0, 3950) + '\n... [Truncated for Telegram limits]</pre>';
+					// If output exceeds Telegram's 4096 character limit, send as a .txt file
+					if (finalOut.length > 3900) {
+						const rawText = `Deep Recon Report for ${domain}\n\nWeb Tech:\n${httpxResult.stdout}\n\nDomain Info:\n${whoisResult.stdout}\n\nSubdomains:\n${subResult.stdout}\n\nNmap:\n${nmapResult.stdout}`;
+						const fileBytes = new Uint8Array(new TextEncoder().encode(rawText));
+						
+						await ctx.replyWithDocument(new InputFile(fileBytes, `${domain}_recon.txt`), {
+							caption: `✅ <b>Deep Recon Complete:</b> <code>${escapeHtml(domain)}</code>\n⚠️ Output too large, see attached report.`,
+							parse_mode: 'HTML'
+						});
+						// Clean up the progress message
+						await ctx.api.deleteMessage(ctx.chat.id, progressMessage.message_id).catch(() => {});
+					} else {
+						await safeEdit(finalOut);
 					}
 
-					await safeEdit(finalOut);
 					await dbClient.updateScanStatus(scanId, 'completed');
 				} catch (err: any) {
 					await safeEdit(`❌ <b>Execution Failed:</b> <code>${escapeHtml(err.message)}</code>`);
