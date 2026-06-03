@@ -2,7 +2,7 @@ import { CommandContext, Context, InlineKeyboard } from 'grammy';
 import { Env } from '../../types';
 
 export async function handleHelp(ctx: CommandContext<Context>, env: Env) {
-	const msg = `📖 <b>RECONBOX MANUAL</b>\n` +
+	const msg = `📖 <b>MANUAL</b>\n` +
 		`━━━━━━━━━━━━━━━━━━━━━━\n` +
 		`Welcome to the ultimate Ephemeral Security Sandbox. All containers self-destruct after use.\n\n` +
 		`🔍 <b>1. Security Scanning:</b>\n` +
@@ -17,8 +17,6 @@ export async function handleHelp(ctx: CommandContext<Context>, env: Env) {
 		`<code>nmap, subfinder, httpx, whois, dig, curl, wget, jq, grep, cat, ls, echo</code>\n\n` +
 		`<i>⚠️ Privacy: We store zero logs. Outputs exist only in your chat.</i>`;
 
-	const keyboard = new InlineKeyboard()
-		.url('👨‍💻 Contact Founder & Support', 'https://t.me/drkingbd');
-
+	const keyboard = new InlineKeyboard().url('👨‍💻 Contact Founder & Support', 'https://t.me/drkingbd');
 	await ctx.reply(msg, { parse_mode: 'HTML', reply_markup: keyboard });
 }
