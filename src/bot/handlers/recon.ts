@@ -25,7 +25,7 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 		const scanId = await dbClient.createScan(tgId, domain, 'multi-recon');
 		if (access.tier === 'free') await dbClient.deductCredit(tgId);
 
-		const progressMessage = await ctx.reply('⏳ <b>[1/3]</b> Provisioning isolated Sandbox...', { parse_mode: 'HTML' });
+		const progressMessage = await ctx.reply('⏳ <b>[1/5]</b> Provisioning isolated Security Sandbox...', { parse_mode: 'HTML' });
 		await ctx.replyWithChatAction('typing').catch(() => {});
 
 		const safeEdit = async (text: string) => {
@@ -37,36 +37,58 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 				let sandbox = null;
 				try {
 					await dbClient.updateScanStatus(scanId, 'running');
-					await safeEdit(`🔍 <b>[2/3]</b> Sandbox initialized. Running Recon tools sequentially on <b>${escapeHtml(domain)}</b> to prevent limits...`);
-
 					sandbox = getSandbox(env.Sandbox, crypto.randomUUID(), { sleepAfter: '2m' });
 
 					const safeExec = async (cmd: string, timeout: number) => {
 						try { return await sandbox!.exec(cmd, { timeout }); } 
-						catch (e: any) { return { stdout: '', stderr: `[Error: ${e.message}]`, success: false }; }
+						catch (e: any) { return { stdout: '', stderr: `[Timeout/Error: ${e.message}]`, success: false }; }
 					};
 
-					// Executing sequentially to avoid Sandbox CPU/Memory OutOfMemory kills
-					const subResult = await safeExec(`subfinder -d ${domain} -silent -max-time 15`, 20000);
-					const whoisResult = await safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Expiry Date:" | head -n 4`, 15000);
-					const nmapResult = await safeExec(`nmap -sT -F -T4 ${domain}`, 30000);
-					const httpxResult = await safeExec(`echo ${domain} | httpx -silent -sc -td -title`, 20000);
-
+					// Step 1: Subdomain Enumeration (Write to file for pipeline)
+					await safeEdit(`🔍 <b>[2/5]</b> Enumerating Subdomains (Subfinder)...`);
+					await safeExec(`subfinder -d ${domain} -all -silent -max-time 20 > /workspace/subs.txt`, 25000);
+					const subResult = await safeExec(`cat /workspace/subs.txt`, 5000);
+					
 					const subList = (subResult.stdout || '').split('\n').filter(s => s.trim().length > 0);
-					const subFormatted = subList.length > 0 ? subList.slice(0, 10).join('\n') : 'No subdomains found.';
+					const subCount = subList.length;
 
-					let finalOut = `✅ <b>Deep Recon Complete:</b> <code>${escapeHtml(domain)}</code>\n\n`;
-					finalOut += formatOutput('🌐 Web Tech (Httpx):', httpxResult.stdout || httpxResult.stderr);
-					finalOut += formatOutput('ℹ️ Domain Info:', whoisResult.stdout || whoisResult.stderr);
-					finalOut += formatOutput(`🔗 Subdomains (Top 10 of ${subList.length}):`, subFormatted);
-					finalOut += formatOutput('🛡️ Port Scan (Nmap):', (nmapResult.stdout || nmapResult.stderr).substring(0, 800));
+					// Step 2: Live Host & Tech Stack Probing (Feed subdomains into Httpx)
+					await safeEdit(`🔍 <b>[3/5]</b> Probing ${subCount > 0 ? subCount : 1} targets for Tech Stack (Httpx)...`);
+					
+					// If subfinder found subs, use them. Otherwise, fallback to the root domain.
+					const httpxTarget = subCount > 0 ? 'cat /workspace/subs.txt' : `echo ${domain}`;
+					// Flags: Status Code, Tech Detect, Server Header, IP, CNAME, Title
+					const httpxResult = await safeExec(`${httpxTarget} | httpx -silent -sc -td -server -ip -cname -title`, 35000);
 
+					// Step 3: Fast Service & Port Scanning (Nmap Top 100 ports with Service Versioning)
+					await safeEdit(`🔍 <b>[4/5]</b> Scanning Open Ports & Service Versions (Nmap)...`);
+					const nmapResult = await safeExec(`nmap -sT -sV -F -T4 --open -Pn ${domain}`, 40000);
+
+					// Step 4: Identity & Registrar Extraction (Whois)
+					await safeEdit(`🔍 <b>[5/5]</b> Extracting Domain Identity (Whois)...`);
+					const whoisResult = await safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Expiry Date:|Name Server:|Registrant Organization:" | awk '{$1=$1;print}' | sort -u | head -n 10`, 15000);
+
+					// Final Report Generation
+					const subFormatted = subCount > 0 ? subList.slice(0, 15).join('\n') : 'No subdomains found.';
+
+					let finalOut = `✅ <b>Attack Surface Report:</b> <code>${escapeHtml(domain)}</code>\n\n`;
+					finalOut += formatOutput('ℹ️ Domain Identity:', whoisResult.stdout || whoisResult.stderr);
+					finalOut += formatOutput(`🔗 Discovered Subdomains (Top 15 of ${subCount}):`, subFormatted);
+					finalOut += formatOutput('🌐 Live Web Services & Tech Stack:', httpxResult.stdout || httpxResult.stderr);
+					finalOut += formatOutput('🛡️ Open Ports & Services (Top 100):', (nmapResult.stdout || nmapResult.stderr));
+
+					// Send as Document if it exceeds Telegram limits
 					if (finalOut.length > 3900) {
-						const rawText = `Deep Recon Report for ${domain}\n\nWeb Tech:\n${httpxResult.stdout}\n\nDomain Info:\n${whoisResult.stdout}\n\nSubdomains:\n${subResult.stdout}\n\nNmap:\n${nmapResult.stdout}`;
+						const rawText = `=== ATTACK SURFACE REPORT FOR ${domain} ===\n\n` +
+										`[DOMAIN IDENTITY]\n${whoisResult.stdout}\n\n` +
+										`[ALL DISCOVERED SUBDOMAINS (${subCount})]\n${subResult.stdout}\n\n` +
+										`[LIVE HOSTS & TECH STACK]\n${httpxResult.stdout}\n\n` +
+										`[PORT SCAN & SERVICE VERSIONS]\n${nmapResult.stdout}`;
+										
 						const fileBytes = new Uint8Array(new TextEncoder().encode(rawText));
 						
-						await ctx.replyWithDocument(new InputFile(fileBytes, `${domain}_recon.txt`), {
-							caption: `✅ <b>Deep Recon Complete:</b> <code>${escapeHtml(domain)}</code>\n⚠️ Output too large, see attached report.`,
+						await ctx.replyWithDocument(new InputFile(fileBytes, `${domain}_attack_surface.txt`), {
+							caption: `✅ <b>Deep Recon Complete:</b> <code>${escapeHtml(domain)}</code>\n⚠️ Output too large, see attached detailed OSINT report.`,
 							parse_mode: 'HTML'
 						});
 						await ctx.api.deleteMessage(ctx.chat.id, progressMessage.message_id).catch(() => {});
@@ -79,6 +101,7 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					await safeEdit(`❌ <b>Execution Failed:</b> <code>${escapeHtml(err.message)}</code>`);
 					await dbClient.updateScanStatus(scanId, 'failed');
 				} finally {
+					// Ensure Sandbox is destroyed to prevent memory leaks and save costs
 					if (sandbox) try { await sandbox.destroy(); } catch (e) {}
 				}
 			})()
