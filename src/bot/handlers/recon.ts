@@ -2,7 +2,7 @@ import { CommandContext, Context, InputFile } from 'grammy';
 import { Env } from '../../types';
 import { DbClient } from '../../db/client';
 import { getSandbox } from '@cloudflare/sandbox';
-import { formatOutput, escapeHtml } from '../../utils/ui';
+import { formatOutput, escapeHtml, getProgressBar } from '../../utils/ui';
 
 export async function handleRecon(ctx: CommandContext<Context>, env: Env, executionCtx: ExecutionContext) {
 	const tgId = ctx.from?.id;
@@ -28,16 +28,20 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 		}
 
 		const isPro = access.tier === 'pro';
-
 		const scanId = await dbClient.createScan(tgId, domain, 'multi-recon');
 		if (!isPro) await dbClient.deductCredit(tgId);
 
-		const progressMessage = await ctx.reply(`⏳ <b>[1/5]</b> Provisioning ${isPro ? '🚀 PRO' : 'isolated'} Sandbox...`, { parse_mode: 'HTML' });
+		const totalSteps = 4;
+		const progressMessage = await ctx.reply(
+			`⏳ <b>Initializing Scan...</b>\n<code>${getProgressBar(0, totalSteps)}</code>\nProvisioning ${isPro ? '🚀 PRO' : 'isolated'} Sandbox...`, 
+			{ parse_mode: 'HTML' }
+		);
 		await ctx.replyWithChatAction('typing').catch(() => {});
 
-		const safeEdit = async (text: string) => {
+		const safeEdit = async (step: number, actionText: string) => {
 			try { 
-				await ctx.api.editMessageText(ctx.chat.id, progressMessage.message_id, text, { parse_mode: 'HTML' }); 
+				const bar = getProgressBar(step, totalSteps);
+				await ctx.api.editMessageText(ctx.chat.id, progressMessage.message_id, `⏳ <b>Scanning: ${escapeHtml(domain)}</b>\n<code>${bar}</code>\n${actionText}`, { parse_mode: 'HTML' }); 
 			} catch (e) {}
 		};
 
@@ -56,27 +60,25 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 						catch (e: any) { return { stdout: '', stderr: `[Timeout/Error: ${e.message}]`, success: false, exitCode: 1 }; }
 					};
 
-					// Timeouts are doubled for PRO users
-					const tm = isPro ? 2 : 1; 
-
-					await safeEdit(`🔍 <b>[2/5]</b> Enumerating Subdomains (Subfinder)...`);
-					await safeExec(`subfinder -d ${domain} -all -silent -max-time ${isPro ? 20 : 10} > /workspace/subs.txt`, 15000 * tm);
+					// Step 1: Subdomains
+					await safeEdit(1, '🔍 Enumerating Subdomains (Subfinder)...');
+					await safeExec(`subfinder -d ${domain} -all -silent -max-time ${isPro ? 20 : 10} > /workspace/subs.txt`, isPro ? 25000 : 15000);
 					
 					const subResult = await safeExec(`cat /workspace/subs.txt 2>/dev/null || echo ""`, 5000);
 					const subList = (subResult.stdout || '').split('\n').filter(s => s.trim().length > 0);
 					const subCount = subList.length;
 
-					await safeEdit(`🔍 <b>[3/5]</b> Probing ${subCount > 0 ? subCount : 1} targets for Tech Stack...`);
+					// Step 2: Tech Stack
+					await safeEdit(2, `⚡ Probing ${subCount > 0 ? subCount : 1} targets for Tech Stack...`);
 					const httpxTarget = subCount > 0 ? 'cat /workspace/subs.txt' : `echo ${domain}`;
-					const httpxResult = await safeExec(`${httpxTarget} | httpx -silent -sc -td -server -ip -cname -title`, 25000 * tm);
+					const httpxResult = await safeExec(`${httpxTarget} | httpx -silent -sc -td -server -title -t 50`, isPro ? 30000 : 20000);
 
-					await safeEdit(`🔍 <b>[4/5]</b> Scanning Open Ports & Services (Nmap)...`);
-					// PRO gets deep version scan (-sV), Free gets fast scan (-F)
-					const nmapCmd = isPro ? `nmap -sT -sV -T4 --open -Pn ${domain}` : `nmap -sT -F -T4 --open -Pn ${domain}`;
-					const nmapResult = await safeExec(nmapCmd, 45000 * tm);
+					// Step 3: Identity & Whois
+					await safeEdit(3, `🌐 Extracting Domain Identity...`);
+					const whoisResult = await safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Expiry Date:|Name Server:|Registrant Organization:" | awk '{$1=$1;print}' | sort -u | head -n 10`, 10000);
 
-					await safeEdit(`🔍 <b>[5/5]</b> Extracting Domain Identity (Whois)...`);
-					const whoisResult = await safeExec(`whois ${domain} | grep -iE "Registrar:|Creation Date:|Expiry Date:|Name Server:|Registrant Organization:" | awk '{$1=$1;print}' | sort -u | head -n 10`, 10000 * tm);
+					// Step 4: Finalizing Report (Removed Nmap for performance, offloaded to CLI)
+					await safeEdit(4, `✅ Finalizing Attack Surface Report...`);
 
 					const subFormatted = subCount > 0 ? subList.slice(0, 15).join('\n') : 'No subdomains found.';
 
@@ -84,23 +86,29 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env, execut
 					finalOut += formatOutput('ℹ️ Domain Identity:', whoisResult.stdout || whoisResult.stderr);
 					finalOut += formatOutput(`🔗 Discovered Subdomains (Top 15 of ${subCount}):`, subFormatted);
 					finalOut += formatOutput('🌐 Live Web Services & Tech Stack:', httpxResult.stdout || httpxResult.stderr);
-					finalOut += formatOutput(`🛡️ Open Ports & Services ${isPro ? '(Deep Scan)' : '(Top 100)'}:`, (nmapResult.stdout || nmapResult.stderr));
+					finalOut += `\n<i>💡 Tip: Run <code>/cli nmap -F ${domain}</code> for port scanning.</i>`;
 
 					if (finalOut.length > 3900) {
-						const rawText = `=== ATTACK SURFACE REPORT FOR ${domain} ===\n\n[DOMAIN IDENTITY]\n${whoisResult.stdout}\n\n[ALL DISCOVERED SUBDOMAINS (${subCount})]\n${subResult.stdout}\n\n[LIVE HOSTS & TECH STACK]\n${httpxResult.stdout}\n\n[PORT SCAN & SERVICE VERSIONS]\n${nmapResult.stdout}`;
+						const rawText = `=== ATTACK SURFACE REPORT FOR ${domain} ===\n\n[DOMAIN IDENTITY]\n${whoisResult.stdout}\n\n[ALL DISCOVERED SUBDOMAINS (${subCount})]\n${subResult.stdout}\n\n[LIVE HOSTS & TECH STACK]\n${httpxResult.stdout}`;
 						const fileBytes = new Uint8Array(new TextEncoder().encode(rawText));
-						await ctx.replyWithDocument(new InputFile(fileBytes, `${domain}_attack_surface.txt`), {
-							caption: `✅ <b>Deep Recon Complete:</b> <code>${escapeHtml(domain)}</code>`,
+						await ctx.replyWithDocument(new InputFile(fileBytes, `${domain}_recon.txt`), {
+							caption: `✅ <b>Fast Recon Complete:</b> <code>${escapeHtml(domain)}</code>\nUse <code>/cli</code> for deep port scanning.`,
 							parse_mode: 'HTML'
 						});
 						await ctx.api.deleteMessage(ctx.chat.id, progressMessage.message_id).catch(() => {});
 					} else {
-						await safeEdit(finalOut);
+						await safeEdit(4, finalOut);
+						// Remove the progress bar visual and just show the final output
+						try { 
+							await ctx.api.editMessageText(ctx.chat.id, progressMessage.message_id, finalOut, { parse_mode: 'HTML' }); 
+						} catch (e) {}
 					}
 
 					await dbClient.updateScanStatus(scanId, 'completed');
 				} catch (err: any) {
-					await safeEdit(`❌ <b>Execution Failed:</b> <code>${escapeHtml(err.message)}</code>`);
+					try {
+						await ctx.api.editMessageText(ctx.chat.id, progressMessage.message_id, `❌ <b>Execution Failed:</b> <code>${escapeHtml(err.message)}</code>`, { parse_mode: 'HTML' });
+					} catch(e) {}
 					await dbClient.updateScanStatus(scanId, 'failed');
 				} finally {
 					if (sandbox) try { await sandbox.destroy(); } catch (e) {}
