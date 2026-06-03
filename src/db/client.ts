@@ -8,26 +8,23 @@ export class DbClient {
 	}
 
 	async getOrCreateUser(tgId: number, username: string): Promise<UserRow | null> {
-		await this.db
-			.prepare(`INSERT INTO users (tg_id, username) VALUES (?, ?) ON CONFLICT(tg_id) DO NOTHING`)
+		// Optimized: 1 single query using RETURNING *
+		let user = await this.db
+			.prepare(`INSERT INTO users (tg_id, username) VALUES (?, ?) 
+					  ON CONFLICT(tg_id) DO UPDATE SET username = excluded.username 
+					  RETURNING *`)
 			.bind(tgId, username)
-			.run();
-
-		const user = await this.db
-			.prepare(`SELECT * FROM users WHERE tg_id = ?`)
-			.bind(tgId)
 			.first<UserRow>();
 
 		if (user && user.tier === 'free') {
 			const lastReset = new Date(user.last_reset_at).getTime();
 			const now = Date.now();
-			// Reset user credits if 24 hours have passed since last reset
+			
 			if (now - lastReset > 24 * 60 * 60 * 1000) {
-				await this.db
-					.prepare(`UPDATE users SET credits = 5, last_reset_at = CURRENT_TIMESTAMP WHERE tg_id = ?`)
+				user = await this.db
+					.prepare(`UPDATE users SET credits = 5, last_reset_at = CURRENT_TIMESTAMP WHERE tg_id = ? RETURNING *`)
 					.bind(tgId)
-					.run();
-				user.credits = 5;
+					.first<UserRow>();
 			}
 		}
 
@@ -40,14 +37,8 @@ export class DbClient {
 			.bind(tgId)
 			.first<{ credits: number; tier: string }>();
 
-		if (!user) {
-			return { allowed: false, tier: 'free', credits: 0 };
-		}
-
-		if (user.tier === 'free' && user.credits <= 0) {
-			return { allowed: false, tier: user.tier, credits: user.credits };
-		}
-
+		if (!user) return { allowed: false, tier: 'free', credits: 0 };
+		if (user.tier === 'free' && user.credits <= 0) return { allowed: false, tier: user.tier, credits: user.credits };
 		return { allowed: true, tier: user.tier, credits: user.credits };
 	}
 
@@ -57,24 +48,15 @@ export class DbClient {
 			.bind(tgId, target, tool)
 			.first<{ id: number }>();
 
-		if (!result) {
-			throw new Error('Database transaction failed while creating scan log');
-		}
-
+		if (!result) throw new Error('DB Transaction Failed');
 		return result.id;
 	}
 
 	async updateScanStatus(scanId: number, status: 'running' | 'completed' | 'failed'): Promise<void> {
-		await this.db
-			.prepare(`UPDATE scans SET status = ? WHERE id = ?`)
-			.bind(status, scanId)
-			.run();
+		await this.db.prepare(`UPDATE scans SET status = ? WHERE id = ?`).bind(status, scanId).run();
 	}
 
 	async deductCredit(tgId: number): Promise<void> {
-		await this.db
-			.prepare(`UPDATE users SET credits = credits - 1 WHERE tg_id = ? AND tier = 'free'`)
-			.bind(tgId)
-			.run();
+		await this.db.prepare(`UPDATE users SET credits = credits - 1 WHERE tg_id = ? AND tier = 'free'`).bind(tgId).run();
 	}
 }
