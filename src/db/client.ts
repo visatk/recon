@@ -1,4 +1,4 @@
-import { Env, UserRow } from '../types';
+import { UserRow } from '../types';
 
 export class DbClient {
 	private db: D1Database;
@@ -61,6 +61,20 @@ export class DbClient {
 	async addCredits(tgId: number, amount: number): Promise<boolean> {
 		const res = await this.db.prepare(`UPDATE users SET credits = credits + ? WHERE tg_id = ?`).bind(amount, tgId).run();
 		return res.success;
+	}
+
+	async recordTransaction(chargeId: string, tgId: number, amount: number): Promise<boolean> {
+		try {
+			const res = await this.db
+				.prepare(`INSERT INTO transactions (charge_id, tg_id, amount) VALUES (?, ?, ?)`)
+				.bind(chargeId, tgId, amount)
+				.run();
+			return res.success;
+		} catch (e) {
+			// Catch constraint violations to prevent duplicated credit application
+			console.error(`Transaction record failed or duplicate charge_id: ${chargeId}`, e);
+			return false;
+		}
 	}
 
 	async getSystemStats(): Promise<{ totalUsers: number; proUsers: number; totalScans: number }> {
