@@ -5,6 +5,7 @@ export interface Env {
 	Sandbox: DurableObjectNamespace;
 	SCAN_QUEUE: Queue<ScanJob>;
 	REPORTS_BUCKET: R2Bucket;
+	[key: string]: any;
 }
 
 export type ScanJob = {
