@@ -18,10 +18,13 @@ export async function processReconJob(job: ScanJob, env: Env) {
 
 	try {
 		await dbClient.updateScanStatus(job.scanId, 'running');
-		sandbox = getSandbox(env.Sandbox, crypto.randomUUID(), { sleepAfter: job.isPro ? '5m' : '2m' });
+		sandbox = getSandbox(env.Sandbox, crypto.randomUUID(), { sleepAfter: job.isPro ? '5m' : '2m', enableDefaultSession: false });
 
 		const safeExec = async (cmd: string, timeout: number) => {
-			try { return await sandbox!.exec(cmd, { timeout }); } 
+			try { 
+				const res = await sandbox!.exec(cmd, { timeout }); 
+				return { stdout: (res.stdout + '\n' + res.stderr).trim(), stderr: res.stderr, success: res.success, exitCode: res.exitCode };
+			} 
 			catch (e: any) { return { stdout: '', stderr: `[Timeout/Error: ${e.message}]`, success: false, exitCode: 1 }; }
 		};
 
@@ -79,10 +82,14 @@ export async function processCliJob(job: ScanJob, env: Env) {
 
 	try {
 		await dbClient.updateScanStatus(job.scanId, 'running');
-		sandbox = getSandbox(env.Sandbox, crypto.randomUUID(), { sleepAfter: job.isPro ? '5m' : '2m' });
+		sandbox = getSandbox(env.Sandbox, crypto.randomUUID(), { sleepAfter: job.isPro ? '5m' : '2m', enableDefaultSession: false });
 
 		const result = await sandbox.exec(job.payload, { timeout: job.isPro ? 120000 : 45000 });
-		const output = result.stdout || result.stderr || '[No Output]';
+		
+		let output = '';
+		if (result.stdout) output += result.stdout + '\n';
+		if (result.stderr) output += result.stderr + '\n';
+		output = output.trim() || '[No Output]';
 
 		if (output.length > 3900) {
 			const fileKey = `cli/${job.tgId}/execution_${Date.now()}.txt`;

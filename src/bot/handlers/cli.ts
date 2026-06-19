@@ -11,8 +11,8 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env) {
 	if (!tgId) return;
 
 	if (!rawCommand) return ctx.reply('⚠️ <b>Please provide a command.</b>\nExample: <code>/cli nmap -F target.com</code>', { parse_mode: 'HTML' });
-	if (/[;&|`$\n\r]/.test(rawCommand) || rawCommand.includes('>') || rawCommand.includes('<')) {
-		return ctx.reply('❌ <b>Security Alert:</b> Shell chaining operators are strictly prohibited.', { parse_mode: 'HTML' });
+	if (/[;&|`$\n\r<>]/.test(rawCommand)) {
+		return ctx.reply('❌ <b>Security Alert:</b> Shell chaining and redirection operators are strictly prohibited.', { parse_mode: 'HTML' });
 	}
 
 	const baseTool = rawCommand.split(' ')[0].toLowerCase();

@@ -3,7 +3,7 @@ export interface Env {
 	ADMIN_TG_ID: string;
 	TRC20_WALLET: string;
 	DB: D1Database;
-	Sandbox: any;
+	Sandbox: DurableObjectNamespace;
 	SCAN_QUEUE: Queue<ScanJob>;
 	REPORTS_BUCKET: R2Bucket;
 }

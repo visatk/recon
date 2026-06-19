@@ -14,8 +14,8 @@ export async function handleAdmin(ctx: CommandContext<Context>, env: Env) {
 
 export async function handleTier(ctx: CommandContext<Context>, env: Env) {
 	if (!isAdmin(ctx, env)) return;
-	const args = ctx.match?.split(' ');
-	if (!args || args.length !== 2) return ctx.reply('⚠️ <code>/tier &lt;tg_id&gt; &lt;pro|free&gt;</code>', { parse_mode: 'HTML' });
+	const args = ctx.match?.trim().split(/\s+/);
+	if (!args || args.length !== 2 || !args[0]) return ctx.reply('⚠️ <code>/tier &lt;tg_id&gt; &lt;pro|free&gt;</code>', { parse_mode: 'HTML' });
 
 	const targetId = parseInt(args[0]);
 	const tier = args[1].toLowerCase();
@@ -31,8 +31,8 @@ export async function handleTier(ctx: CommandContext<Context>, env: Env) {
 
 export async function handleAddCredits(ctx: CommandContext<Context>, env: Env) {
 	if (!isAdmin(ctx, env)) return;
-	const args = ctx.match?.split(' ');
-	if (!args || args.length !== 2) return ctx.reply('⚠️ <code>/addcredits &lt;tg_id&gt; &lt;amount&gt;</code>', { parse_mode: 'HTML' });
+	const args = ctx.match?.trim().split(/\s+/);
+	if (!args || args.length !== 2 || !args[0]) return ctx.reply('⚠️ <code>/addcredits &lt;tg_id&gt; &lt;amount&gt;</code>', { parse_mode: 'HTML' });
 
 	const targetId = parseInt(args[0]);
 	const amount = parseInt(args[1]);

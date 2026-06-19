@@ -15,6 +15,14 @@ export { Sandbox } from '@cloudflare/sandbox';
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		if (request.method !== 'POST') {
+			if (request.method === 'GET') {
+				const url = new URL(request.url);
+				if (url.pathname === '/setup') {
+					const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
+					await bot.api.setWebhook(`https://${url.host}/`, { allowed_updates: ['message', 'callback_query'] });
+					return new Response(`Webhook set to https://${url.host}/`, { status: 200 });
+				}
+			}
 			return new Response(JSON.stringify({ runtime: 'operational', system: 'ReconBox Secure Core Node' }), { 
 				status: 200, 
 				headers: { 'Content-Type': 'application/json' } 
