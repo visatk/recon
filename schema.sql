@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS scans;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS transactions;
 
 CREATE TABLE users (
     tg_id INTEGER PRIMARY KEY,
@@ -20,5 +21,15 @@ CREATE TABLE scans (
     FOREIGN KEY (tg_id) REFERENCES users(tg_id) ON DELETE CASCADE
 );
 
+CREATE TABLE transactions (
+    charge_id TEXT PRIMARY KEY,
+    tg_id INTEGER NOT NULL,
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'XTR',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tg_id) REFERENCES users(tg_id) ON DELETE CASCADE
+);
+
 CREATE INDEX idx_users_tier ON users(tier);
 CREATE INDEX idx_scans_tg_id ON scans(tg_id);
+CREATE INDEX idx_transactions_tg_id ON transactions(tg_id);
