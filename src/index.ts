@@ -2,6 +2,9 @@ import { createBotHandler } from './bot';
 import { processReconJob } from './bot/jobs/runner';
 import { Env, ScanJob } from './types';
 
+// Export the Sandbox class required by wrangler.jsonc bindings
+export { Sandbox } from '@cloudflare/sandbox';
+
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         if (request.method === 'POST') {
