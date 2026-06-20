@@ -1,11 +1,11 @@
 export interface Env {
 	TELEGRAM_BOT_TOKEN: string;
 	ADMIN_TG_ID: string;
+	TRC20_WALLET: string;
 	DB: D1Database;
 	Sandbox: DurableObjectNamespace;
 	SCAN_QUEUE: Queue<ScanJob>;
 	REPORTS_BUCKET: R2Bucket;
-	[key: string]: any;
 }
 
 export type ScanJob = {
