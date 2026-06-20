@@ -24,9 +24,10 @@ export async function handleMe(ctx: CommandContext<Context>, env: Env) {
 			msg += `💎 <b>Plan:</b> ⭐ <b>PRO ACCESS</b> ⭐\n⚡ <b>Credits:</b> ♾️ <b>Unlimited</b>\n\n<i>🚀 You have unlocked Max Execution Time & Deep Scans!</i>`;
 		} else {
 			msg += `💎 <b>Plan:</b> <b>FREE TIER</b>\n⚡ <b>Credits Left:</b> <b>${user.credits} / 5</b>\n\n<i>🔄 Free credits reset every 24 hours.</i>`;
+			keyboard.url('💎 Upgrade to PRO', 'https://t.me/drkingbd');
 		}
 
-		await ctx.reply(msg, { parse_mode: 'HTML' });
+		await ctx.reply(msg, { parse_mode: 'HTML', reply_markup: keyboard });
 	} catch (error) {
 		await ctx.reply('⚠️ <b>Database Error:</b> Unable to fetch profile.', { parse_mode: 'HTML' });
 	}

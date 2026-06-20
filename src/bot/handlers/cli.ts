@@ -28,7 +28,7 @@ export async function handleCli(ctx: CommandContext<Context>, env: Env) {
 		const scanId = await dbClient.createScan(tgId, logTarget, baseTool);
 		if (!isPro) await dbClient.deductCredit(tgId);
 
-		const progressMsg = await ctx.reply(`⏳ <b>Command Queued!</b>\n<code>$ ${escapeHtml(rawCommand)}</code>\n<i>Awaiting secure sandbox provisioning...</i>`, { parse_mode: 'HTML' });
+		const progressMsg = await ctx.reply(`⏳ <b>Command Queued!</b>\n<blockquote><code>$ ${escapeHtml(rawCommand)}</code></blockquote>\n<i>Awaiting secure sandbox provisioning...</i>`, { parse_mode: 'HTML' });
 
 		const jobPayload: ScanJob = { type: 'cli', tgId, chatId: ctx.chat.id, messageId: progressMsg.message_id, scanId, payload: rawCommand, isPro };
 		await env.SCAN_QUEUE.send(jobPayload);

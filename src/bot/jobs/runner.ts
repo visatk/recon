@@ -12,7 +12,7 @@ export async function processReconJob(job: ScanJob, env: Env) {
 	const safeEdit = async (step: number, text: string) => {
 		try { 
 			const bar = getProgressBar(step, 4);
-			await bot.api.editMessageText(job.chatId, job.messageId, `⏳ <b>Scanning: ${escapeHtml(job.payload)}</b>\n<code>${bar}</code>\n${text}`, { parse_mode: 'HTML' }); 
+			await bot.api.editMessageText(job.chatId, job.messageId, `⏳ <b>Scanning: ${escapeHtml(job.payload)}</b>\n<code>${bar}</code>\n\n<i>${text}</i>`, { parse_mode: 'HTML' }); 
 		} catch (e) {}
 	};
 
@@ -99,13 +99,13 @@ export async function processCliJob(job: ScanJob, env: Env) {
 			if (r2Object) {
 				const arrayBuffer = await r2Object.arrayBuffer();
 				await bot.api.sendDocument(job.chatId, new InputFile(new Uint8Array(arrayBuffer), `cli_output.txt`), {
-					caption: `✅ <b>Execution Complete</b>\n<code>$ ${escapeHtml(job.payload)}</code>`,
+					caption: `✅ <b>Execution Complete</b>\n<blockquote><code>$ ${escapeHtml(job.payload)}</code></blockquote>`,
 					parse_mode: 'HTML'
 				});
 				await bot.api.deleteMessage(job.chatId, job.messageId).catch(() => {});
 			}
 		} else {
-			const finalOut = `✅ <b>Execution Complete</b>\n<code>$ ${escapeHtml(job.payload)}</code>\n\n<pre>${escapeHtml(output)}</pre>`;
+			const finalOut = `✅ <b>Execution Complete</b>\n<blockquote><code>$ ${escapeHtml(job.payload)}</code></blockquote>\n\n<blockquote>${escapeHtml(output)}</blockquote>`;
 			await bot.api.editMessageText(job.chatId, job.messageId, finalOut, { parse_mode: 'HTML' });
 		}
 

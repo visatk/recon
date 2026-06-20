@@ -12,7 +12,8 @@ export async function handleStart(ctx: CommandContext<Context>, env: Env) {
 		const dbClient = new DbClient(env.DB);
 		await dbClient.getOrCreateUser(tgId, username);
 
-		const msg = `🛡️ <b>Welcome to ReconBox, ${escapeHtml(username)}!</b>\n\n` +
+		const msg = `🛡️ <b>Welcome to ReconBox, ${escapeHtml(username)}!</b>\n` +
+			`━━━━━━━━━━━━━━━━━━━━━━\n` +
 			`<i>Your Anonymous, Ephemeral, and Blazing Fast Security Sandbox. Built for elite Bug Bounty Hunters.</i>\n\n` +
 			`📌 <b>Core Commands:</b>\n` +
 			`🔹 <code>/recon target.com</code> - Instant Attack Surface Discovery\n` +

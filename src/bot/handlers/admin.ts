@@ -8,7 +8,14 @@ export async function handleAdmin(ctx: CommandContext<Context>, env: Env) {
 	if (!isAdmin(ctx, env)) return;
 	const stats = await new DbClient(env.DB).getSystemStats();
 
-	const msg = `👑 <b>SYSTEM COMMAND CENTER</b>\n━━━━━━━━━━━━━━━━━━━━━━\n📊 <b>Platform Analytics:</b>\n├ 👥 <b>Total Users:</b> ${stats.totalUsers}\n├ 💎 <b>PRO Users:</b> ${stats.proUsers}\n└ 🔍 <b>Total Scans:</b> ${stats.totalScans}\n\n🛠️ <b>Management Commands:</b>\n• <code>/tier [id] pro</code> - Upgrade\n• <code>/tier [id] free</code> - Downgrade\n• <code>/addcredits [id] [qty]</code> - Gift credits`;
+	const msg = `👑 <b>SYSTEM COMMAND CENTER</b>\n━━━━━━━━━━━━━━━━━━━━━━\n📊 <b>Platform Analytics:</b>\n` + 
+				`<blockquote>👥 <b>Total Users:</b> ${stats.totalUsers}\n` +
+				`💎 <b>PRO Users:</b> ${stats.proUsers}\n` + 
+				`🔍 <b>Total Scans:</b> ${stats.totalScans}</blockquote>\n\n` + 
+				`🛠️ <b>Management Commands:</b>\n` +
+				`• <code>/tier [id] pro</code> - Upgrade\n` +
+				`• <code>/tier [id] free</code> - Downgrade\n` +
+				`• <code>/addcredits [id] [qty]</code> - Gift credits`;
 	await ctx.reply(msg, { parse_mode: 'HTML' });
 }
 

@@ -23,7 +23,7 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env) {
 		const scanId = await dbClient.createScan(tgId, domain, 'multi-recon');
 		if (!isPro) await dbClient.deductCredit(tgId);
 
-		const progressMsg = await ctx.reply(`⏳ <b>Scan Queued!</b>\nTarget: <code>${escapeHtml(domain)}</code>\n<i>Your job is in the background queue and will start shortly...</i>`, { parse_mode: 'HTML' });
+		const progressMsg = await ctx.reply(`⏳ <b>Scan Queued!</b>\n<blockquote>🎯 <b>Target:</b> <code>${escapeHtml(domain)}</code></blockquote>\n<i>Your job is in the background queue and will start shortly...</i>`, { parse_mode: 'HTML' });
 
 		const jobPayload: ScanJob = { type: 'recon', tgId, chatId: ctx.chat.id, messageId: progressMsg.message_id, scanId, payload: domain, isPro };
 		await env.SCAN_QUEUE.send(jobPayload);
