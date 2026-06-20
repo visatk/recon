@@ -1,7 +1,7 @@
-FROM docker.io/cloudflare/sandbox:0.12.1-python
+FROM docker.io/cloudflare/sandbox:0.11.0-python
 
 RUN apt-get update && apt-get install -y \
-    nmap wget unzip tcpdump tshark nikto sqlmap dirb hydra john whois dnsutils \
+    nmap wget unzip jq whois dnsutils \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
