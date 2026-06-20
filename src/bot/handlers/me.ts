@@ -13,17 +13,17 @@ export async function handleMe(ctx: CommandContext<Context>, env: Env) {
 		if (!user) return ctx.reply('⚠️ <b>Profile not found.</b> Run /start first.', { parse_mode: 'HTML' });
 
 		const isPro = user.tier === 'pro';
-		let msg = `👤 <b>ACCOUNT DASHBOARD</b>\n` +
+		let msg = `📊 <b>ENTERPRISE WORKSPACE</b>\n` +
 				  `━━━━━━━━━━━━━━━━━━━━━━\n` +
-				  `📝 <b>User:</b> ${escapeHtml(user.username)}\n` +
-				  `🆔 <b>ID:</b> <code>${user.tg_id}</code>\n\n`;
+				  `👤 <b>Client:</b> ${escapeHtml(user.username)}\n` +
+				  `🆔 <b>Account ID:</b> <code>${user.tg_id}</code>\n\n`;
 
 		const keyboard = new InlineKeyboard();
 
 		if (isPro) {
-			msg += `💎 <b>Plan:</b> ⭐ <b>PRO ACCESS</b> ⭐\n⚡ <b>Credits:</b> ♾️ <b>Unlimited</b>\n\n<i>🚀 You have unlocked Max Execution Time & Deep Scans!</i>`;
+			msg += `💎 <b>Subscription:</b> ⭐ <b>PRO ELITE</b> ⭐\n⚡ <b>Compute Credits:</b> ♾️ <b>Unlimited</b>\n\n<i>🚀 Active: Max Execution Timeout & Unrestricted Deep Scans.</i>`;
 		} else {
-			msg += `💎 <b>Plan:</b> <b>FREE TIER</b>\n⚡ <b>Credits Left:</b> <b>${user.credits} / 5</b>\n\n<i>🔄 Free credits reset every 24 hours.</i>`;
+			msg += `💎 <b>Subscription:</b> <b>FREE TIER</b>\n⚡ <b>Compute Credits:</b> <b>${user.credits} / 5</b>\n\n<i>🔄 Credits reset every 24 hours. Upgrade to bypass limits.</i>`;
 			keyboard.url('💎 Upgrade to PRO', 'https://t.me/drkingbd');
 		}
 

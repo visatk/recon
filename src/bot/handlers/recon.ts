@@ -9,21 +9,21 @@ export async function handleRecon(ctx: CommandContext<Context>, env: Env) {
 	if (!tgId) return;
 
 	if (!domain || !/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(domain)) {
-		return ctx.reply('⚠️ <b>Invalid target format.</b>\nExample: <code>/recon target.com</code>', { parse_mode: 'HTML' });
+		return ctx.reply('⚠️ <b>Invalid Target Format.</b>\nExample: <code>/recon target.com</code>', { parse_mode: 'HTML' });
 	}
 
 	const dbClient = new DbClient(env.DB);
 	try {
-		if (await dbClient.hasActiveScan(tgId)) return ctx.reply('⏳ <b>Scan in progress!</b> Please wait.', { parse_mode: 'HTML' });
+		if (await dbClient.hasActiveScan(tgId)) return ctx.reply('⏳ <b>Scan already in progress.</b> Please wait for the current operation to conclude.', { parse_mode: 'HTML' });
 		
 		const access = await dbClient.checkCredits(tgId);
-		if (!access.allowed) return ctx.reply('❌ <b>Credit Limit Reached.</b>\nWait 24 hours or upgrade to PRO.', { parse_mode: 'HTML' });
+		if (!access.allowed) return ctx.reply('❌ <b>Compute Limit Reached.</b>\nWait 24 hours for reset or upgrade to <b>PRO</b> for unlimited access.', { parse_mode: 'HTML' });
 
 		const isPro = access.tier === 'pro';
 		const scanId = await dbClient.createScan(tgId, domain, 'multi-recon');
 		if (!isPro) await dbClient.deductCredit(tgId);
 
-		const progressMsg = await ctx.reply(`⏳ <b>Scan Queued!</b>\n<blockquote>🎯 <b>Target:</b> <code>${escapeHtml(domain)}</code></blockquote>\n<i>Your job is in the background queue and will start shortly...</i>`, { parse_mode: 'HTML' });
+		const progressMsg = await ctx.reply(`⏳ <b>Engine Initializing...</b>\n<blockquote>🎯 <b>Target:</b> <code>${escapeHtml(domain)}</code></blockquote>\n<i>Provisioning secure container. Scan will commence shortly.</i>`, { parse_mode: 'HTML' });
 
 		const jobPayload: ScanJob = { type: 'recon', tgId, chatId: ctx.chat.id, messageId: progressMsg.message_id, scanId, payload: domain, isPro };
 		await env.SCAN_QUEUE.send(jobPayload);

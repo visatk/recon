@@ -54,15 +54,16 @@ export async function processReconJob(job: ScanJob, env: Env) {
 		finalOut += formatOutput(`🔗 Top Subdomains:`, subFormatted);
 		finalOut += formatOutput('🌐 Tech Stack:', httpxResult.stdout);
 
+		const fileUrl = `https://files.cybercoderbd.com/${fileKey}`;
 		if (finalOut.length > 3900 && r2Object) {
 			const arrayBuffer = await r2Object.arrayBuffer();
 			await bot.api.sendDocument(job.chatId, new InputFile(new Uint8Array(arrayBuffer), `${job.payload}_recon.txt`), {
-				caption: `✅ <b>Fast Recon Complete</b>\n📁 <i>Report securely loaded from R2 Storage.</i>`,
+				caption: `✅ <b>Fast Recon Complete</b>\n📁 <i>Report securely loaded from R2 Storage.</i>\n🔗 <b>Web Log:</b> <a href="${fileUrl}">View Log</a>`,
 				parse_mode: 'HTML'
 			});
 			await bot.api.deleteMessage(job.chatId, job.messageId).catch(() => {});
 		} else {
-			finalOut += `\n📁 <i>Full backup saved to R2 Cloud Storage.</i>`;
+			finalOut += `\n📁 <i>Full backup saved to R2 Cloud Storage.</i>\n🔗 <b>Web Log:</b> <a href="${fileUrl}">View Log</a>`;
 			await safeEdit(4, finalOut);
 		}
 
@@ -95,11 +96,12 @@ export async function processCliJob(job: ScanJob, env: Env) {
 			const fileKey = `cli/${job.tgId}/execution_${Date.now()}.txt`;
 			await env.REPORTS_BUCKET.put(fileKey, output);
 			const r2Object = await env.REPORTS_BUCKET.get(fileKey);
+			const fileUrl = `https://files.cybercoderbd.com/${fileKey}`;
 
 			if (r2Object) {
 				const arrayBuffer = await r2Object.arrayBuffer();
 				await bot.api.sendDocument(job.chatId, new InputFile(new Uint8Array(arrayBuffer), `cli_output.txt`), {
-					caption: `✅ <b>Execution Complete</b>\n<blockquote><code>$ ${escapeHtml(job.payload)}</code></blockquote>`,
+					caption: `✅ <b>Execution Complete</b>\n<blockquote><code>$ ${escapeHtml(job.payload)}</code></blockquote>\n🔗 <b>Web Log:</b> <a href="${fileUrl}">View Log</a>`,
 					parse_mode: 'HTML'
 				});
 				await bot.api.deleteMessage(job.chatId, job.messageId).catch(() => {});
