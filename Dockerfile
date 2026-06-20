@@ -1,4 +1,4 @@
-FROM docker.io/cloudflare/sandbox:0.11.0-python
+FROM docker.io/cloudflare/sandbox:0.12.1-python
 
 RUN apt-get update && apt-get install -y \
     nmap wget unzip jq whois dnsutils \
